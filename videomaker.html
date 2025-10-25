@@ -1,166 +1,105 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Prompt → Talking Avatar Video</title>
-  <style>
-    :root{--bg:#0f1724;--card:#0b1220;--muted:#9ca3af;--accent:#7c3aed;--glass:rgba(255,255,255,0.04)}
-    html,body{height:100%;margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial}
-    body{background:linear-gradient(180deg,#071022 0%,#081427 100%);color:#e6eef8;display:flex;align-items:center;justify-content:center;padding:24px}
-    .container{max-width:1100px;width:100%;display:grid;grid-template-columns:420px 1fr;gap:20px}
-    .card{background:var(--card);border-radius:12px;padding:18px;box-shadow:0 6px 18px rgba(2,6,23,0.6);border:1px solid rgba(255,255,255,0.03)}
-    h1{margin:0;font-size:20px}
-    label{display:block;font-size:13px;color:var(--muted);margin-top:12px}
-    textarea,input,select{width:100%;margin-top:6px;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:var(--glass);color:inherit;font-size:14px}
-    button{margin-top:12px;padding:10px 14px;border-radius:10px;border:0;background:linear-gradient(90deg,var(--accent),#2dd4bf);color:#041124;font-weight:600;cursor:pointer}
-    .small{font-size:13px;color:var(--muted)}
-    .preview{display:flex;flex-direction:column;gap:12px}
-    video,canvas{width:100%;border-radius:10px;background:#000}
-    footer{font-size:12px;color:var(--muted);margin-top:10px}
-    @media (max-width:940px){.container{grid-template-columns:1fr;}}
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Realistic Avatar Talker (JS-only demo)</title>
+<style>
+  body{background:#000;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}
+  #panel{max-width:400px;padding:20px;background:#111;border-radius:12px}
+  textarea,input,button{width:100%;margin-top:10px;padding:10px;border-radius:8px;border:none;font-size:15px}
+  textarea{height:100px}
+  button{background:linear-gradient(90deg,#8b5cf6,#06b6d4);color:#fff;font-weight:bold;cursor:pointer}
+  video,canvas{width:100%;border-radius:12px;margin-top:15px;background:#000}
+  a{color:#0ff}
+</style>
 </head>
 <body>
-  <div class="container">
-    <div class="card">
-      <h1>Talking Avatar Video Maker</h1>
-      <p class="small">Enter a prompt below — the avatar will speak and a short video will be generated locally.</p>
+<div id="panel">
+  <h2>Realistic Talking Avatar (Pure JS)</h2>
+  <textarea id="prompt">Hello, this is a realistic speaking avatar demo created only with JavaScript.</textarea>
+  <input id="avatarUrl" value="https://i.ibb.co/7n0V9Pz/man-face.jpg" placeholder="Avatar image URL">
+  <button id="generate">Generate Video</button>
+  <div id="status" style="font-size:13px;color:#aaa"></div>
+  <video id="player" controls playsinline></video>
+  <canvas id="canvas" style="display:none"></canvas>
+  <a id="download" style="display:none" download="avatar.webm">Download</a>
+</div>
 
-      <label for="prompt">Prompt</label>
-      <textarea id="prompt" rows="5" placeholder="e.g. Hello world, this is my first talking avatar video!"></textarea>
+<script>
+const promptEl = document.getElementById('prompt');
+const avatarEl = document.getElementById('avatarUrl');
+const canvas = document.getElementById('canvas');
+const player = document.getElementById('player');
+const statusEl = document.getElementById('status');
+const downloadEl = document.getElementById('download');
+const btn = document.getElementById('generate');
 
-      <label for="duration">Duration (seconds)</label>
-      <input id="duration" type="number" min="2" max="60" value="8">
+async function makeTalkingAvatar(){
+  const text = promptEl.value.trim() || 'Hello there!';
+  const avatarUrl = avatarEl.value.trim();
+  const w = 640, h = 480;
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
 
-      <label for="res">Resolution</label>
-      <select id="res">
-        <option value="640x360">640×360</option>
-        <option value="854x480">854×480</option>
-        <option value="1280x720" selected>1280×720</option>
-      </select>
+  const img = new Image();
+  img.crossOrigin='anonymous';
+  img.src = avatarUrl;
+  await new Promise(r => img.onload = r);
 
-      <label for="bg">Background color</label>
-      <input id="bg" type="color" value="#071226">
+  // Prepare voice
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.rate = 1; utter.pitch = 1;
+  let speaking = true;
+  utter.onend = () => speaking=false;
+  speechSynthesis.cancel();
+  speechSynthesis.speak(utter);
 
-      <button id="generate">Generate Video</button>
-      <div id="status" class="small"></div>
+  // Recorder
+  const fps = 30;
+  const stream = canvas.captureStream(fps);
+  const chunks = [];
+  const rec = new MediaRecorder(stream, {mimeType:'video/webm;codecs=vp9'});
+  rec.ondataavailable = e=>{if(e.data.size)chunks.push(e.data)};
+  rec.start();
 
-      <footer>All in your browser — uses <code>speechSynthesis</code>, <code>canvas</code> & <code>MediaRecorder</code>.</footer>
-    </div>
-
-    <div class="card preview">
-      <video id="player" controls playsinline></video>
-      <canvas id="canvas" style="display:none"></canvas>
-      <a id="download" class="small" style="text-decoration:none;display:none" download="avatar-video.webm">Download</a>
-    </div>
-  </div>
-
-  <script>
-    const promptEl = document.getElementById('prompt');
-    const durationEl = document.getElementById('duration');
-    const resEl = document.getElementById('res');
-    const bgEl = document.getElementById('bg');
-    const generateBtn = document.getElementById('generate');
-    const status = document.getElementById('status');
-    const player = document.getElementById('player');
-    const canvas = document.getElementById('canvas');
-    const downloadLink = document.getElementById('download');
-
-    function parseRes(v){ const [w,h] = v.split('x').map(Number); return {w,h}; }
-
-    async function generateClientSideVideo(){
-      const prompt = promptEl.value.trim() || 'Hello there! This is a demo of a talking avatar.';
-      const duration = Math.max(2, Number(durationEl.value)||6);
-      const {w,h} = parseRes(resEl.value);
-      const bg = bgEl.value;
-
-      const avatarUrl = 'https://api.dicebear.com/9.x/adventurer/svg?seed=' + 
-                        Math.random().toString(36).slice(2);
-      const avatarImg = new Image();
-      avatarImg.crossOrigin = 'anonymous';
-      avatarImg.src = avatarUrl;
-      await new Promise(r => avatarImg.onload = r);
-
-      status.textContent = 'Preparing canvas & audio...';
-      canvas.width = w; canvas.height = h;
-      const ctx = canvas.getContext('2d');
-
-      const fps = 30;
-      const stream = canvas.captureStream(fps);
-      const chunks = [];
-      const rec = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
-      rec.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
-
-      const totalFrames = Math.round(duration * fps);
-      let frame = 0;
-
-      // Speech
-      const utter = new SpeechSynthesisUtterance(prompt);
-      utter.pitch = 1; utter.rate = 1; utter.volume = 1;
-      let speaking = true;
-      utter.onend = () => speaking = false;
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(utter);
-
-      rec.start();
-      status.textContent = 'Recording...';
-
-      for (frame = 0; frame <= totalFrames; frame++) {
-        const t = frame / totalFrames;
-        ctx.fillStyle = bg;
-        ctx.fillRect(0, 0, w, h);
-
-        const avW = Math.min(w * 0.4, 400);
-        const avH = avW;
-        const avX = w/2 - avW/2;
-        const avY = h/2 - avH/2 - 50;
-        ctx.drawImage(avatarImg, avX, avY, avW, avH);
-
-        // Mouth animation
-        const mouthX = w/2;
-        const mouthY = avY + avH * 0.78;
-        const mouthW = avW * 0.15;
-        const talking = speaking && Math.random() > 0.5;
-        const mouthH = talking ? 10 + Math.random()*10 : 2;
-        ctx.fillStyle = '#000';
-        ctx.beginPath();
-        ctx.ellipse(mouthX, mouthY, mouthW, mouthH, 0, 0, Math.PI*2);
-        ctx.fill();
-
-        // Text overlay
-        ctx.font = `bold ${Math.max(18, w/40)}px Arial`;
-        ctx.fillStyle = 'rgba(255,255,255,0.9)';
-        ctx.textAlign = 'center';
-        ctx.fillText(prompt, w/2, h - 40);
-
-        await new Promise(r => setTimeout(r, 1000 / fps));
-      }
-
-      rec.stop();
-      status.textContent = 'Finalizing video...';
-
-      await new Promise(res => rec.onstop = res);
-
-      const blob = new Blob(chunks, {type:'video/webm'});
-      const url = URL.createObjectURL(blob);
-      player.src = url;
-      player.play().catch(()=>{});
-      downloadLink.href = url;
-      downloadLink.style.display = 'inline-block';
-      downloadLink.textContent = `Download (${Math.round(blob.size/1024)} KB)`;
-
-      status.textContent = 'Done — video ready!';
+  const duration = text.split(' ').length / 2 + 2; // rough estimate
+  const totalFrames = Math.floor(duration * fps);
+  statusEl.textContent='Recording...';
+  
+  for(let f=0; f<totalFrames; f++){
+    ctx.drawImage(img,0,0,w,h);
+    // simulate mouth movement
+    if(speaking){
+      const mouthY = h*0.7;
+      const mouthW = 100;
+      const mouthH = 10 + Math.random()*25;
+      ctx.fillStyle='#000';
+      ctx.beginPath();
+      ctx.ellipse(w/2, mouthY, mouthW, mouthH, 0, 0, Math.PI*2);
+      ctx.fill();
     }
+    await new Promise(r=>setTimeout(r,1000/fps));
+  }
+  rec.stop();
+  await new Promise(r=>rec.onstop=r);
 
-    generateBtn.onclick = async ()=>{
-      generateBtn.disabled = true;
-      status.textContent = 'Generating...';
-      try{ await generateClientSideVideo(); }
-      catch(e){ console.error(e); status.textContent = 'Error: ' + e; }
-      finally{ generateBtn.disabled = false; }
-    };
-  </script>
+  const blob = new Blob(chunks,{type:'video/webm'});
+  const url = URL.createObjectURL(blob);
+  player.src = url;
+  player.play();
+  downloadEl.href=url;
+  downloadEl.style.display='inline-block';
+  downloadEl.textContent='Download Video ('+Math.round(blob.size/1024)+' KB)';
+  statusEl.textContent='Done.';
+}
+
+btn.onclick=()=>{
+  btn.disabled=true;
+  makeTalkingAvatar().catch(e=>statusEl.textContent='Error: '+e).finally(()=>btn.disabled=false);
+};
+</script>
 </body>
 </html>
+
 
