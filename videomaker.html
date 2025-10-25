@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Prompt → Video — Videomaker</title>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--muted:#9ca3af;--accent:#7c3aed;--glass:rgba(255,255,255,0.04)}
+    html,body{height:100%;margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial}
+    body{background:linear-gradient(180deg,#071022 0%,#081427 100%);color:#e6eef8;display:flex;align-items:center;justify-content:center;padding:24px}
+    .container{max-width:1100px;width:100%;display:grid;grid-template-columns:420px 1fr;gap:20px}
+    .card{background:var(--card);border-radius:12px;padding:18px;box-shadow:0 6px 18px rgba(2,6,23,0.6);border:1px solid rgba(255,255,255,0.03)}
+    h1{margin:0;font-size:20px}
+    label{display:block;font-size:13px;color:var(--muted);margin-top:12px}
+    textarea,input,select{width:100%;margin-top:6px;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:var(--glass);color:inherit;font-size:14px}
+    button{margin-top:12px;padding:10px 14px;border-radius:10px;border:0;background:linear-gradient(90deg,var(--accent),#2dd4bf);color:#041124;font-weight:600;cursor:pointer}
+    .small{font-size:13px;color:var(--muted)}
+    .controls{display:flex;gap:8px;align-items:center}
+    .preview{display:flex;flex-direction:column;gap:12px}
+    video,canvas{width:100%;border-radius:10px;background:#000}
+    .meta{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .chip{padding:6px 8px;border-radius:999px;background:rgba(255,255,255,0.03);font-size:13px}
+    footer{font-size:12px;color:var(--muted);margin-top:10px}
+    @media (max-width:940px){.container{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card" role="region" aria-label="controls">
+      <h1>Prompt → Video (one-page)</h1>
+      <p class="small">Type a prompt below and produce a short animated text video (client-side demo). Use the dropdown for animation style.</p>
+
+      <label for="prompt">Prompt</label>
+      <textarea id="prompt" rows="5" placeholder="e.g. A peaceful sunrise over misty mountains with soft piano music"></textarea>
+
+      <label for="style">Animation style</label>
+      <select id="style">
+        <option value="slide">Slide (left → right)</option>
+        <option value="fade">Fade in / out</option>
+        <option value="type">Typewriter</option>
+        <option value="kenburns">Ken Burns (zoom & pan)</option>
+      </select>
+
+      <div class="controls">
+        <div style="flex:1">
+          <label for="duration">Duration (seconds)</label>
+          <input id="duration" type="number" min="1" max="60" value="8" />
+        </div>
+        <div style="width:120px">
+          <label for="res">Resolution</label>
+          <select id="res">
+            <option value="640x360">640×360</option>
+            <option value="854x480">854×480</option>
+            <option value="1280x720" selected>1280×720</option>
+            <option value="1920x1080">1920×1080</option>
+          </select>
+        </div>
+      </div>
+
+      <label for="bg">Background color</label>
+      <input id="bg" type="color" value="#071226" />
+
+      <label for="fontSize">Font size (px)</label>
+      <input id="fontSize" type="number" min="16" max="160" value="48" />
+
+      <button id="generate">Generate Video</button>
+      <div id="status" class="small" aria-live="polite"></div>
+
+      <footer>Client-side demo: uses &lt;canvas&gt; + MediaRecorder to create a downloadable <code>.webm</code>. For AI-based photorealistic video, connect this UI to an external video-generation API.</footer>
+    </div>
+
+    <div class="card preview" role="region" aria-label="preview">
+      <div class="meta">
+        <div class="chip">Preview</div>
+        <div id="info" class="small">No video yet</div>
+      </div>
+      <video id="player" controls playsinline></video>
+      <canvas id="canvas" style="display:none"></canvas>
+      <div style="display:flex;gap:8px">
+        <a id="download" class="chip" style="text-decoration:none;display:none" download="prompt-video.webm">Download</a>
+        <button id="replay" class="chip" style="display:none">Replay</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Grab elements
+    const promptEl = document.getElementById('prompt');
+    const styleEl = document.getElementById('style');
+    const durationEl = document.getElementById('duration');
+    const resEl = document.getElementById('res');
+    const bgEl = document.getElementById('bg');
+    const fontSizeEl = document.getElementById('fontSize');
+    const generateBtn = document.getElementById('generate');
+    const status = document.getElementById('status');
+    const player = document.getElementById('player');
+    const canvas = document.getElementById('canvas');
+    const info = document.getElementById('info');
+    const downloadLink = document.getElementById('download');
+    const replayBtn = document.getElementById('replay');
+
+    function parseRes(v){const [w,h]=v.split('x').map(Number);return {w,h};}
+
+    // Basic accessibility focus
+    generateBtn.addEventListener('keydown', (e)=>{ if(e.key==='Enter') generateBtn.click(); });
+
+    async function generateClientSideVideo(){
+      const prompt = promptEl.value.trim() || 'Empty prompt — nothing to show.';
+      const style = styleEl.value;
+      const duration = Math.max(1, Number(durationEl.value)||6);
+      const {w,h} = parseRes(resEl.value);
+      const bg = bgEl.value;
+      const fontSize = Number(fontSizeEl.value)||48;
+
+      status.textContent = 'Preparing canvas...';
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+
+      // Create stream and recorder
+      const fps = 30;
+      const stream = canvas.captureStream(fps);
+      let recorded = [];
+      const mime = 'video/webm;codecs=vp9,opus';
+      if(!MediaRecorder.isTypeSupported(mime)){
+        status.textContent = 'Warning: preferred mime not supported, falling back to default.';
+      }
+      const rec = new MediaRecorder(stream, {mimeType: mime});
+      rec.ondataavailable = (ev)=>{ if(ev.data && ev.data.size) recorded.push(ev.data); };
+
+      // Animation variables
+      const totalFrames = Math.round(duration * fps);
+      let frame = 0;
+      status.textContent = 'Recording — rendering frames...';
+
+      rec.start();
+
+      // helper: draw a background
+      function drawBackground(){
+        ctx.fillStyle = bg; ctx.fillRect(0,0,w,h);
+      }
+
+      // helper: draw text centered with wrapping
+      function drawWrappedText(text, x, y, maxWidth, lineHeight){
+        const words = text.split(' ');
+        let line = '', cy=y;
+        ctx.textAlign = 'center';
+        for(let n=0;n<words.length;n++){
+          const testLine = line + words[n] + ' ';
+          const metrics = ctx.measureText(testLine);
+          if(metrics.width > maxWidth && n>0){
+            ctx.fillText(line, x, cy);
+            line = words[n] + ' ';
+            cy += lineHeight;
+          } else line = testLine;
+        }
+        ctx.fillText(line, x, cy);
+      }
+
+      // Animation loop (synchronous frames using requestAnimationFrame is not reliable for MediaRecorder; we step manually)
+      for(frame=0; frame<=totalFrames; frame++){
+        const t = frame/totalFrames; // 0..1
+        drawBackground();
+
+        // stylings
+        ctx.fillStyle = 'rgba(255,255,255,0.96)';
+        ctx.font = `700 ${fontSize}px Inter, Arial`;
+        ctx.shadowColor = 'rgba(0,0,0,0.6)';
+        ctx.shadowBlur = Math.max(4, fontSize*0.08);
+
+        if(style === 'slide'){
+          const offset = Math.round((1 - t) * (w*0.6));
+          ctx.save();
+          ctx.translate(-offset, 0);
+          drawWrappedText(prompt, w/2 + offset, h/2 - fontSize/2, w*0.9, fontSize*1.05);
+          ctx.restore();
+        } else if(style === 'fade'){
+          ctx.globalAlpha = Math.min(1, Math.sin(Math.PI * t));
+          drawWrappedText(prompt, w/2, h/2 - fontSize/2, w*0.9, fontSize*1.05);
+          ctx.globalAlpha = 1;
+        } else if(style === 'type'){
+          // reveal characters progressively
+          const chars = Math.round(prompt.length * t);
+          const visible = prompt.slice(0, chars);
+          drawWrappedText(visible + (t<1? '▌' : ''), w/2, h/2 - fontSize/2, w*0.9, fontSize*1.05);
+        } else if(style === 'kenburns'){
+          // zoom in slightly
+          const scale = 1 + 0.15 * t;
+          ctx.save();
+          ctx.translate(w/2, h/2);
+          ctx.scale(scale, scale);
+          ctx.translate(-w/2, -h/2);
+          drawWrappedText(prompt, w/2, h/2 - fontSize/2, w*0.9, fontSize*1.05);
+          ctx.restore();
+        }
+
+        // optional footer with progress
+        ctx.font = `400 ${Math.max(12, fontSize*0.22)}px Inter, Arial`;
+        ctx.fillStyle = 'rgba(255,255,255,0.65)';
+        ctx.fillText(`Frame ${frame}/${totalFrames}`, w - 90, h - 20);
+
+        // wait for next frame time
+        await new Promise(r => setTimeout(r, 1000 / fps));
+      }
+
+      rec.stop();
+
+      status.textContent = 'Finalizing video...';
+
+      // wait for recorder to finish
+      await new Promise((resolve) => { rec.onstop = resolve; setTimeout(()=>{/* safety timeout */}, 300); });
+
+      const blob = new Blob(recorded, {type: 'video/webm'});
+      const url = URL.createObjectURL(blob);
+      player.src = url;
+      player.play().catch(()=>{});
+
+      downloadLink.href = url;
+      downloadLink.style.display = 'inline-block';
+      downloadLink.textContent = `Download — ${Math.round(blob.size/1024)} KB`;
+      replayBtn.style.display = 'inline-block';
+      info.textContent = `${w}×${h} • ${duration}s • ${style} `;
+      status.textContent = 'Done — video ready.';
+
+      // cleanup when user navigates away from page
+      window._lastBlobUrl = url;
+    }
+
+    generateBtn.addEventListener('click', async ()=>{
+      // If you want to connect to a backend AI video generator, swap this out and POST the prompt
+      try{
+        generateBtn.disabled = true; status.textContent = '';
+
+        // If the user wanted a server-based AI generator, show note and fallback
+        const wantsAI = false; // placeholder
+
+        // Run client-side demo generator
+        await generateClientSideVideo();
+      }catch(err){
+        console.error(err);
+        status.textContent = 'Error: ' + (err.message || err);
+      }finally{ generateBtn.disabled = false; }
+    });
+
+    replayBtn.addEventListener('click', ()=>{ if(player.src) player.play(); });
+
+    // Cleanup blob URLs
+    window.addEventListener('beforeunload', ()=>{ if(window._lastBlobUrl) URL.revokeObjectURL(window._lastBlobUrl); });
+
+    // Convenience: allow pressing Ctrl+Enter to generate
+    promptEl.addEventListener('keydown', (e)=>{ if(e.ctrlKey && e.key === 'Enter') generateBtn.click(); });
+  </script>
+</body>
+</html>
