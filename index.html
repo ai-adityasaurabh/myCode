@@ -1,51 +1,83 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Webcam Mood Analyzer</title>
 <style>
+  *{box-sizing:border-box}
   body{
+    margin:0;
     font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;
-    margin:0;background:#f4f6fa;color:#111;
-    display:flex;flex-direction:row;flex-wrap:wrap;
-    height:100vh;overflow:hidden;
+    background:#f4f6fa;
+    color:#111;
+    display:flex;
+    flex-direction:row;
+    flex-wrap:wrap;
+    height:100vh;
+    overflow:hidden;
   }
-  #left,#right{padding:10px;}
-  #left{flex:2;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+  #left,#right{padding:10px}
+  #left{
+    flex:2;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    min-width:320px;
+  }
   #right{
-    flex:1;background:#fff;border-left:2px solid #e5e7eb;
-    overflow-y:auto;font-size:14px;
+    flex:1;
+    background:#fff;
+    border-left:2px solid #e5e7eb;
+    overflow-y:auto;
+    font-size:14px;
   }
-  video,canvas{
-    border-radius:10px;max-width:100%;
+  video{
+    border-radius:10px;
+    max-width:100%;
     box-shadow:0 4px 15px rgba(0,0,0,0.1);
   }
   #controls{
-    margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;justify-content:center;
+    margin-top:10px;
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    justify-content:center;
   }
   button{
-    padding:8px 14px;border-radius:8px;border:1px solid #ccc;
-    background:white;cursor:pointer;font-size:15px;
+    padding:8px 14px;
+    border-radius:8px;
+    border:1px solid #ccc;
+    background:white;
+    cursor:pointer;
+    font-size:15px;
   }
   button[disabled]{opacity:.5;cursor:not-allowed}
   #status{margin-top:8px;font-size:14px;color:#444;text-align:center}
   .mood-pill{
-    display:inline-block;padding:4px 8px;border-radius:20px;
-    background:#eef2ff;border:1px solid #cdd8ff;margin:3px;
+    display:inline-block;
+    padding:4px 8px;
+    border-radius:20px;
+    background:#eef2ff;
+    border:1px solid #cdd8ff;
+    margin:3px;
   }
-  #mood-log{padding:10px;}
-  #avg-table td,#avg-table th{padding:3px 6px;text-align:left;}
-  #avg-table th{background:#f8fafc;}
-  h3{margin:6px 0;}
+  #mood-log{padding:10px}
+  #avg-table{border-collapse:collapse;width:100%}
+  #avg-table td,#avg-table th{padding:4px 6px;text-align:left}
+  #avg-table th{background:#f8fafc}
+  h3{margin:6px 0}
+  @media(max-width:800px){
+    body{flex-direction:column}
+    #right{border-left:none;border-top:2px solid #e5e7eb;height:40vh}
+  }
 </style>
 </head>
 <body>
   <div id="left">
     <h2>😀 Webcam Mood Analyzer</h2>
     <video id="video" autoplay muted playsinline width="640" height="480"></video>
-    <canvas id="overlay" width="640" height="480"
-            style="position:absolute;left:-9999px;"></canvas>
     <div id="controls">
       <button id="btnOpen">Open Camera</button>
       <button id="btnStart" disabled>Start</button>
@@ -63,12 +95,11 @@
     <div id="overall" style="font-weight:bold;font-size:16px;padding:5px;"></div>
   </div>
 
+  <!-- face-api.js -->
   <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
   <script>
   const MODEL_URL='https://justadudewhohacks.github.io/face-api.js/models/';
   const video=document.getElementById('video');
-  const overlay=document.getElementById('overlay');
-  const ctx=overlay.getContext('2d');
   const btnOpen=document.getElementById('btnOpen');
   const btnStart=document.getElementById('btnStart');
   const btnStop=document.getElementById('btnStop');
@@ -97,7 +128,9 @@
       btnOpen.disabled=true;
       status.textContent='Camera open — loading models...';
       await loadModels();
-    }catch(err){alert('Camera access failed: '+err.message);}
+    }catch(err){
+      alert('Camera access failed: '+err.message);
+    }
   });
 
   function updateAverages(expr){
@@ -117,7 +150,6 @@
 
   function updateOverall(){
     if(!moodHistory.length){overallDiv.textContent='—';return;}
-    const last=moodHistory[moodHistory.length-1];
     const all={};
     moodHistory.forEach(m=>{
       for(const [k,v] of Object.entries(m)) all[k]=(all[k]||0)+v;
@@ -159,7 +191,9 @@
     status.textContent='Stopped';
   });
 
-  window.addEventListener('beforeunload',()=>{if(stream)stream.getTracks().forEach(t=>t.stop());});
+  window.addEventListener('beforeunload',()=>{
+    if(stream)stream.getTracks().forEach(t=>t.stop());
+  });
   </script>
 </body>
 </html>
