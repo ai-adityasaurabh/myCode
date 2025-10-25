@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Realistic Avatar Talker (JS-only demo)</title>
+<title>Realistic Avatar Talker — JS Only</title>
 <style>
   body{background:#000;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}
-  #panel{max-width:400px;padding:20px;background:#111;border-radius:12px}
+  #panel{max-width:420px;padding:20px;background:#111;border-radius:12px}
   textarea,input,button{width:100%;margin-top:10px;padding:10px;border-radius:8px;border:none;font-size:15px}
-  textarea{height:100px}
+  textarea{height:80px}
   button{background:linear-gradient(90deg,#8b5cf6,#06b6d4);color:#fff;font-weight:bold;cursor:pointer}
   video,canvas{width:100%;border-radius:12px;margin-top:15px;background:#000}
   a{color:#0ff}
@@ -16,8 +16,8 @@
 </head>
 <body>
 <div id="panel">
-  <h2>Realistic Talking Avatar (Pure JS)</h2>
-  <textarea id="prompt">Hello, this is a realistic speaking avatar demo created only with JavaScript.</textarea>
+  <h2>Realistic Talking Avatar (JS Demo)</h2>
+  <textarea id="prompt">Hello, this is my realistic avatar speaking using only JavaScript.</textarea>
   <input id="avatarUrl" value="https://i.ibb.co/7n0V9Pz/man-face.jpg" placeholder="Avatar image URL">
   <button id="generate">Generate Video</button>
   <div id="status" style="font-size:13px;color:#aaa"></div>
@@ -27,79 +27,83 @@
 </div>
 
 <script>
-const promptEl = document.getElementById('prompt');
-const avatarEl = document.getElementById('avatarUrl');
-const canvas = document.getElementById('canvas');
-const player = document.getElementById('player');
-const statusEl = document.getElementById('status');
-const downloadEl = document.getElementById('download');
-const btn = document.getElementById('generate');
+const promptEl=document.getElementById('prompt');
+const avatarEl=document.getElementById('avatarUrl');
+const canvas=document.getElementById('canvas');
+const player=document.getElementById('player');
+const statusEl=document.getElementById('status');
+const downloadEl=document.getElementById('download');
+const btn=document.getElementById('generate');
 
 async function makeTalkingAvatar(){
-  const text = promptEl.value.trim() || 'Hello there!';
-  const avatarUrl = avatarEl.value.trim();
-  const w = 640, h = 480;
-  canvas.width = w; canvas.height = h;
-  const ctx = canvas.getContext('2d');
+  const text=promptEl.value.trim()||'Hello there!';
+  const avatarUrl=avatarEl.value.trim();
+  const w=640,h=480;
+  canvas.width=w;canvas.height=h;
+  const ctx=canvas.getContext('2d');
 
-  const img = new Image();
+  // Load image
+  const img=new Image();
   img.crossOrigin='anonymous';
-  img.src = avatarUrl;
-  await new Promise(r => img.onload = r);
+  img.src=avatarUrl;
+  await new Promise(r=>img.onload=r);
 
-  // Prepare voice
-  const utter = new SpeechSynthesisUtterance(text);
-  utter.rate = 1; utter.pitch = 1;
-  let speaking = true;
-  utter.onend = () => speaking=false;
+  // Setup recorder
+  const fps=30;
+  const stream=canvas.captureStream(fps);
+  const chunks=[];
+  const rec=new MediaRecorder(stream,{mimeType:'video/webm;codecs=vp9'});
+  rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
+  rec.start();
+
+  // Start speaking
+  const utter=new SpeechSynthesisUtterance(text);
+  utter.pitch=1; utter.rate=1; utter.volume=1;
+  let speaking=true;
+  utter.onend=()=>speaking=false;
   speechSynthesis.cancel();
   speechSynthesis.speak(utter);
 
-  // Recorder
-  const fps = 30;
-  const stream = canvas.captureStream(fps);
-  const chunks = [];
-  const rec = new MediaRecorder(stream, {mimeType:'video/webm;codecs=vp9'});
-  rec.ondataavailable = e=>{if(e.data.size)chunks.push(e.data)};
-  rec.start();
+  // Estimate duration
+  const estDuration=Math.max(3,text.split(' ').length/2);
+  const totalFrames=Math.floor(estDuration*fps);
+  statusEl.textContent='Speaking... (watch avatar move)';
 
-  const duration = text.split(' ').length / 2 + 2; // rough estimate
-  const totalFrames = Math.floor(duration * fps);
-  statusEl.textContent='Recording...';
-  
-  for(let f=0; f<totalFrames; f++){
+  for(let f=0;f<totalFrames;f++){
     ctx.drawImage(img,0,0,w,h);
-    // simulate mouth movement
+    // Simulate mouth movement if still speaking
     if(speaking){
-      const mouthY = h*0.7;
-      const mouthW = 100;
-      const mouthH = 10 + Math.random()*25;
+      const mouthY=h*0.7;
+      const mouthW=w*0.15;
+      const mouthH=10+Math.random()*20;
       ctx.fillStyle='#000';
       ctx.beginPath();
-      ctx.ellipse(w/2, mouthY, mouthW, mouthH, 0, 0, Math.PI*2);
+      ctx.ellipse(w/2,mouthY,mouthW,mouthH,0,0,Math.PI*2);
       ctx.fill();
     }
     await new Promise(r=>setTimeout(r,1000/fps));
   }
+
   rec.stop();
   await new Promise(r=>rec.onstop=r);
-
-  const blob = new Blob(chunks,{type:'video/webm'});
-  const url = URL.createObjectURL(blob);
-  player.src = url;
+  const blob=new Blob(chunks,{type:'video/webm'});
+  const url=URL.createObjectURL(blob);
+  player.src=url;
   player.play();
   downloadEl.href=url;
   downloadEl.style.display='inline-block';
-  downloadEl.textContent='Download Video ('+Math.round(blob.size/1024)+' KB)';
-  statusEl.textContent='Done.';
+  downloadEl.textContent=`Download (${Math.round(blob.size/1024)} KB)`;
+  statusEl.textContent='Done (Video ready — note: no audio due to browser limits)';
 }
 
 btn.onclick=()=>{
   btn.disabled=true;
-  makeTalkingAvatar().catch(e=>statusEl.textContent='Error: '+e).finally(()=>btn.disabled=false);
+  makeTalkingAvatar().catch(e=>statusEl.textContent='Error: '+e)
+    .finally(()=>btn.disabled=false);
 };
 </script>
 </body>
 </html>
+
 
 
