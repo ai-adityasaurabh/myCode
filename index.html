@@ -3,189 +3,240 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Webcam Mood Analyzer</title>
+<title>MoodCam Analyzer</title>
 <style>
-  *{box-sizing:border-box}
+  *{box-sizing:border-box;margin:0;padding:0}
   body{
-    margin:0;
-    font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;
-    background:#f4f6fa;
-    color:#111;
+    font-family:"Poppins",sans-serif;
+    background:linear-gradient(135deg,#dbeafe,#f9fafb);
     display:flex;
     flex-direction:column;
     align-items:center;
     min-height:100vh;
+    overflow-x:hidden;
   }
-  h2{margin:15px 0 10px}
+  h1{margin:10px 0;font-weight:600;color:#111}
+  #container{
+    display:grid;
+    grid-template-columns:1fr 1.2fr 1fr;
+    gap:15px;
+    width:95%;
+    max-width:1200px;
+    margin:10px auto;
+  }
+  .panel{
+    background:rgba(255,255,255,0.7);
+    backdrop-filter:blur(12px);
+    border-radius:15px;
+    box-shadow:0 4px 20px rgba(0,0,0,0.1);
+    padding:12px;
+    overflow:auto;
+    min-height:75vh;
+  }
   video{
-    border-radius:10px;
-    width:90%;
-    max-width:640px;
-    height:auto;
-    box-shadow:0 4px 15px rgba(0,0,0,0.1);
+    width:100%;
+    border-radius:15px;
     background:#000;
   }
-  #controls{
-    margin:10px 0;
+  canvas{
+    position:absolute;
+    top:0;
+    left:0;
+  }
+  #video-box{
+    position:relative;
     display:flex;
-    gap:10px;
     justify-content:center;
-    flex-wrap:wrap;
+    align-items:center;
+  }
+  #controls{
+    display:flex;
+    justify-content:center;
+    gap:10px;
+    margin-top:10px;
   }
   button{
-    padding:10px 16px;
+    border:none;
+    padding:10px 18px;
     border-radius:8px;
-    border:1px solid #ccc;
-    background:white;
+    font-size:15px;
     cursor:pointer;
-    font-size:16px;
+    background:#2563eb;
+    color:white;
   }
   button[disabled]{opacity:.5;cursor:not-allowed}
-  #status{margin:5px 0 10px;font-size:14px;color:#333;text-align:center}
-  #right{
-    background:#fff;
-    width:90%;
-    max-width:640px;
-    border-radius:10px;
-    box-shadow:0 4px 10px rgba(0,0,0,0.05);
-    margin-bottom:20px;
-    padding:10px;
-  }
+  h2{margin-bottom:8px;color:#222}
   .mood-pill{
     display:inline-block;
-    padding:4px 8px;
-    border-radius:20px;
     background:#eef2ff;
-    border:1px solid #cdd8ff;
+    border-radius:20px;
+    padding:5px 10px;
     margin:3px;
+    border:1px solid #c7d2fe;
+    font-size:13px;
   }
-  #mood-log{padding:5px}
-  #avg-table{border-collapse:collapse;width:100%}
-  #avg-table td,#avg-table th{padding:4px 6px;text-align:left}
-  #avg-table th{background:#f8fafc}
-  h3{margin:8px 0 4px}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{padding:6px;text-align:left}
+  th{background:#f1f5f9;position:sticky;top:0}
+  #overall{
+    margin-top:8px;
+    font-weight:600;
+    font-size:16px;
+    color:#111;
+  }
 </style>
 </head>
 <body>
-  <h2>😀 Webcam Mood Analyzer</h2>
-  <video id="video" autoplay muted playsinline></video>
+<h1>🎯 Mood Analysis by Aditya</h1>
 
-  <div id="controls">
-    <button id="btnOpen">Open Camera</button>
-    <button id="btnStart" disabled>Start Detection</button>
-    <button id="btnStop" disabled>Stop</button>
-  </div>
-
-  <div id="status">Waiting...</div>
-
-  <div id="right">
-    <h3>Live Mood Log</h3>
+<div id="container">
+  <div class="panel" id="left">
+    <h2>Live Mood Log</h2>
     <div id="mood-log"></div>
-    <h3>Average Moods</h3>
-    <table id="avg-table"></table>
-    <h3>Overall Mood</h3>
-    <div id="overall" style="font-weight:bold;font-size:16px;padding:5px;"></div>
   </div>
 
-  <!-- face-api.js -->
-  <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
-  <script>
-  const MODEL_URL='https://justadudewhohacks.github.io/face-api.js/models/';
-  const video=document.getElementById('video');
-  const btnOpen=document.getElementById('btnOpen');
-  const btnStart=document.getElementById('btnStart');
-  const btnStop=document.getElementById('btnStop');
-  const status=document.getElementById('status');
-  const logDiv=document.getElementById('mood-log');
-  const avgTable=document.getElementById('avg-table');
-  const overallDiv=document.getElementById('overall');
+  <div class="panel" id="mid">
+    <h2>Camera Feed</h2>
+    <div id="video-box">
+      <video id="video" autoplay muted playsinline></video>
+      <canvas id="overlay"></canvas>
+    </div>
+    <div id="controls">
+      <button id="btnOpen">Open Camera</button>
+      <button id="btnStart" disabled>Start Detection</button>
+      <button id="btnStop" disabled>Stop</button>
+    </div>
+    <div id="status" style="text-align:center;margin-top:5px;">Waiting...</div>
+  </div>
 
-  let stream=null, analyzing=false, intervalId=null;
-  let moodHistory=[], avgScores={};
+  <div class="panel" id="right">
+    <h2>Average Moods</h2>
+    <table id="avg-table"></table>
+    <h2>Overall Mood</h2>
+    <div id="overall">—</div>
+  </div>
+</div>
 
-  async function loadModels(){
-    status.textContent='Loading models...';
-    await Promise.all([
-      faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-      faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL)
-    ]);
-    status.textContent='Models loaded ✔️';
-    btnStart.disabled=false;
+<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+<script>
+const MODEL_URL='https://justadudewhohacks.github.io/face-api.js/models/';
+const video=document.getElementById('video');
+const canvas=document.getElementById('overlay');
+const btnOpen=document.getElementById('btnOpen');
+const btnStart=document.getElementById('btnStart');
+const btnStop=document.getElementById('btnStop');
+const logDiv=document.getElementById('mood-log');
+const avgTable=document.getElementById('avg-table');
+const overallDiv=document.getElementById('overall');
+const status=document.getElementById('status');
+
+let stream=null,analyzing=false,intervalId=null;
+let moodHistory=[],avgScores={};
+
+// Simulated 20 moods (we’ll map from the base 7 detected moods)
+const moodVariants={
+  happy:["joyful","cheerful","playful","content","grateful"],
+  sad:["melancholic","lonely","down","heartbroken","regretful"],
+  angry:["annoyed","furious","frustrated","offended","irritated"],
+  surprised:["shocked","amazed","confused","startled"],
+  disgusted:["displeased","grossed","repelled"],
+  fearful:["anxious","worried","scared","tense"],
+  neutral:["calm","relaxed","focused","sleepy"]
+};
+
+function expandMood(base){
+  const arr=moodVariants[base]||[base];
+  return arr[Math.floor(Math.random()*arr.length)];
+}
+
+async function loadModels(){
+  status.textContent='Loading models...';
+  await Promise.all([
+    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+    faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL)
+  ]);
+  status.textContent='Models loaded ✔️';
+  btnStart.disabled=false;
+}
+
+btnOpen.addEventListener('click',async()=>{
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({video:true});
+    video.srcObject=stream;
+    btnOpen.disabled=true;
+    await loadModels();
+  }catch(err){
+    alert('Camera access failed: '+err.message);
   }
+});
 
-  btnOpen.addEventListener('click',async()=>{
-    try{
-      stream=await navigator.mediaDevices.getUserMedia({video:true});
-      video.srcObject=stream;
-      btnOpen.disabled=true;
-      status.textContent='Camera open — loading models...';
-      await loadModels();
-    }catch(err){
-      alert('Camera access failed: '+err.message);
+function updateAverages(expr){
+  for(const [m,v] of Object.entries(expr)){
+    avgScores[m]=(avgScores[m]||0)+v;
+  }
+}
+
+function renderAvgTable(){
+  const total=moodHistory.length||1;
+  let rows='<tr><th>Mood</th><th>Avg %</th></tr>';
+  for(const [m,v] of Object.entries(avgScores)){
+    rows+=`<tr><td>${m}</td><td>${(v/total*100).toFixed(1)}</td></tr>`;
+  }
+  avgTable.innerHTML=rows;
+}
+
+function updateOverall(){
+  if(!moodHistory.length){overallDiv.textContent='—';return;}
+  const all={};
+  moodHistory.forEach(m=>{
+    for(const [k,v] of Object.entries(m)) all[k]=(all[k]||0)+v;
+  });
+  const top=Object.entries(all).sort((a,b)=>b[1]-a[1])[0][0];
+  overallDiv.textContent=expandMood(top);
+}
+
+function addLog(mood){
+  const time=new Date().toLocaleTimeString();
+  const div=document.createElement('div');
+  div.innerHTML=`<span class='mood-pill'>${time}: <b>${expandMood(mood)}</b></span>`;
+  logDiv.prepend(div);
+  if(logDiv.children.length>40)logDiv.removeChild(logDiv.lastChild);
+}
+
+btnStart.addEventListener('click',()=>{
+  if(analyzing)return;
+  analyzing=true;
+  btnStart.disabled=true;btnStop.disabled=false;
+  status.textContent='Analyzing...';
+  const displaySize={width:video.videoWidth,height:video.videoHeight};
+  faceapi.matchDimensions(canvas,displaySize);
+
+  intervalId=setInterval(async()=>{
+    const dets=await faceapi.detectAllFaces(video,new faceapi.TinyFaceDetectorOptions()).withFaceExpressions();
+    const ctx=canvas.getContext('2d');
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    const resized=faceapi.resizeResults(dets,displaySize);
+    faceapi.draw.drawDetections(canvas,resized);
+
+    if(dets.length>0){
+      const expr=dets[0].expressions;
+      moodHistory.push(expr);
+      updateAverages(expr);
+      const top=Object.entries(expr).sort((a,b)=>b[1]-a[1])[0][0];
+      addLog(top);
+      renderAvgTable();
+      updateOverall();
     }
-  });
+  },400);
+});
 
-  function updateAverages(expr){
-    for(const [mood,val] of Object.entries(expr)){
-      avgScores[mood]=(avgScores[mood]||0)+val;
-    }
-  }
-
-  function renderAvgTable(){
-    const totalSamples=moodHistory.length||1;
-    let rows='<tr><th>Mood</th><th>Average</th></tr>';
-    for(const [mood,val] of Object.entries(avgScores)){
-      rows+=`<tr><td>${mood}</td><td>${(val/totalSamples*100).toFixed(1)}%</td></tr>`;
-    }
-    avgTable.innerHTML=rows;
-  }
-
-  function updateOverall(){
-    if(!moodHistory.length){overallDiv.textContent='—';return;}
-    const all={};
-    moodHistory.forEach(m=>{
-      for(const [k,v] of Object.entries(m)) all[k]=(all[k]||0)+v;
-    });
-    const top=Object.entries(all).sort((a,b)=>b[1]-a[1])[0][0];
-    overallDiv.textContent=top;
-  }
-
-  function addLog(moodName){
-    const time=new Date().toLocaleTimeString();
-    const div=document.createElement('div');
-    div.innerHTML=`<span class='mood-pill'>${time}: <b>${moodName}</b></span>`;
-    logDiv.prepend(div);
-    if(logDiv.children.length>25) logDiv.removeChild(logDiv.lastChild);
-  }
-
-  btnStart.addEventListener('click',()=>{
-    if(analyzing)return;
-    analyzing=true;
-    btnStart.disabled=true;btnStop.disabled=false;
-    status.textContent='Analyzing...';
-    intervalId=setInterval(async()=>{
-      const dets=await faceapi.detectAllFaces(video,new faceapi.TinyFaceDetectorOptions()).withFaceExpressions();
-      if(dets.length>0){
-        const expr=dets[0].expressions;
-        moodHistory.push(expr);
-        updateAverages(expr);
-        const top=Object.entries(expr).sort((a,b)=>b[1]-a[1])[0];
-        addLog(top[0]);
-        renderAvgTable();
-        updateOverall();
-      }
-    },400);
-  });
-
-  btnStop.addEventListener('click',()=>{
-    analyzing=false;clearInterval(intervalId);
-    btnStop.disabled=true;btnStart.disabled=false;
-    status.textContent='Stopped';
-  });
-
-  window.addEventListener('beforeunload',()=>{
-    if(stream)stream.getTracks().forEach(t=>t.stop());
-  });
-  </script>
+btnStop.addEventListener('click',()=>{
+  analyzing=false;clearInterval(intervalId);
+  btnStop.disabled=true;btnStart.disabled=false;
+  status.textContent='Stopped';
+});
+</script>
 </body>
 </html>
+
