@@ -12,49 +12,45 @@
     background:#f4f6fa;
     color:#111;
     display:flex;
-    flex-direction:row;
-    flex-wrap:wrap;
-    height:100vh;
-    overflow:hidden;
-  }
-  #left,#right{padding:10px}
-  #left{
-    flex:2;
-    display:flex;
     flex-direction:column;
     align-items:center;
-    justify-content:center;
-    min-width:320px;
+    min-height:100vh;
   }
-  #right{
-    flex:1;
-    background:#fff;
-    border-left:2px solid #e5e7eb;
-    overflow-y:auto;
-    font-size:14px;
-  }
+  h2{margin:15px 0 10px}
   video{
     border-radius:10px;
-    max-width:100%;
+    width:90%;
+    max-width:640px;
+    height:auto;
     box-shadow:0 4px 15px rgba(0,0,0,0.1);
+    background:#000;
   }
   #controls{
-    margin-top:10px;
+    margin:10px 0;
     display:flex;
-    gap:8px;
-    flex-wrap:wrap;
+    gap:10px;
     justify-content:center;
+    flex-wrap:wrap;
   }
   button{
-    padding:8px 14px;
+    padding:10px 16px;
     border-radius:8px;
     border:1px solid #ccc;
     background:white;
     cursor:pointer;
-    font-size:15px;
+    font-size:16px;
   }
   button[disabled]{opacity:.5;cursor:not-allowed}
-  #status{margin-top:8px;font-size:14px;color:#444;text-align:center}
+  #status{margin:5px 0 10px;font-size:14px;color:#333;text-align:center}
+  #right{
+    background:#fff;
+    width:90%;
+    max-width:640px;
+    border-radius:10px;
+    box-shadow:0 4px 10px rgba(0,0,0,0.05);
+    margin-bottom:20px;
+    padding:10px;
+  }
   .mood-pill{
     display:inline-block;
     padding:4px 8px;
@@ -63,28 +59,24 @@
     border:1px solid #cdd8ff;
     margin:3px;
   }
-  #mood-log{padding:10px}
+  #mood-log{padding:5px}
   #avg-table{border-collapse:collapse;width:100%}
   #avg-table td,#avg-table th{padding:4px 6px;text-align:left}
   #avg-table th{background:#f8fafc}
-  h3{margin:6px 0}
-  @media(max-width:800px){
-    body{flex-direction:column}
-    #right{border-left:none;border-top:2px solid #e5e7eb;height:40vh}
-  }
+  h3{margin:8px 0 4px}
 </style>
 </head>
 <body>
-  <div id="left">
-    <h2>😀 Webcam Mood Analyzer</h2>
-    <video id="video" autoplay muted playsinline width="640" height="480"></video>
-    <div id="controls">
-      <button id="btnOpen">Open Camera</button>
-      <button id="btnStart" disabled>Start</button>
-      <button id="btnStop" disabled>Stop</button>
-    </div>
-    <div id="status">Waiting...</div>
+  <h2>😀 Webcam Mood Analyzer</h2>
+  <video id="video" autoplay muted playsinline></video>
+
+  <div id="controls">
+    <button id="btnOpen">Open Camera</button>
+    <button id="btnStart" disabled>Start Detection</button>
+    <button id="btnStop" disabled>Stop</button>
   </div>
+
+  <div id="status">Waiting...</div>
 
   <div id="right">
     <h3>Live Mood Log</h3>
