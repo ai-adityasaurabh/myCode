@@ -1,109 +1,363 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Realistic Avatar Talker — JS Only</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Realistic Avatar Talker — JS-only (fixed)</title>
 <style>
-  body{background:#000;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}
-  #panel{max-width:420px;padding:20px;background:#111;border-radius:12px}
-  textarea,input,button{width:100%;margin-top:10px;padding:10px;border-radius:8px;border:none;font-size:15px}
-  textarea{height:80px}
-  button{background:linear-gradient(90deg,#8b5cf6,#06b6d4);color:#fff;font-weight:bold;cursor:pointer}
-  video,canvas{width:100%;border-radius:12px;margin-top:15px;background:#000}
-  a{color:#0ff}
+  :root{--bg:#071226;--panel:#0f1724;--muted:#9ca3af;--accent:#7c3aed}
+  body{margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(#041022,#071226);color:#e6eef8;font-family:Inter,system-ui,Segoe UI,Arial}
+  .wrap{width:940px;max-width:96%;display:grid;grid-template-columns:420px 1fr;gap:18px}
+  .card{background:rgba(255,255,255,0.02);padding:18px;border-radius:12px;border:1px solid rgba(255,255,255,0.03);box-shadow:0 6px 20px rgba(2,6,23,0.6)}
+  h1{margin:0 0 8px 0;font-size:18px}
+  label{display:block;color:var(--muted);font-size:13px;margin-top:10px}
+  textarea,input,select,button{width:100%;margin-top:8px;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit;font-size:14px}
+  button{cursor:pointer;border:0;background:linear-gradient(90deg,var(--accent),#06b6d4);color:#041124;font-weight:700}
+  .muted{font-size:13px;color:var(--muted);margin-top:8px}
+  canvas,video{width:100%;border-radius:10px;background:#000}
+  .controls{display:flex;gap:8px;margin-top:8px}
+  .note{font-size:13px;color:#ffdd99;margin-top:8px}
+  @media (max-width:880px){.wrap{grid-template-columns:1fr;}}
 </style>
 </head>
 <body>
-<div id="panel">
-  <h2>Realistic Talking Avatar (JS Demo)</h2>
-  <textarea id="prompt">Hello, this is my realistic avatar speaking using only JavaScript.</textarea>
-  <input id="avatarUrl" value="https://i.ibb.co/7n0V9Pz/man-face.jpg" placeholder="Avatar image URL">
-  <button id="generate">Generate Video</button>
-  <div id="status" style="font-size:13px;color:#aaa"></div>
-  <video id="player" controls playsinline></video>
-  <canvas id="canvas" style="display:none"></canvas>
-  <a id="download" style="display:none" download="avatar.webm">Download</a>
-</div>
+  <div class="wrap">
+    <div class="card">
+      <h1>Realistic Avatar Talker — JS-only</h1>
+      <p class="muted">Enter text, give a realistic face image URL, click Generate. The page will speak the text and record a short visual-only <code>.webm</code>.</p>
+
+      <label for="prompt">Text to speak</label>
+      <textarea id="prompt">Hello — this is a demo of a realistic avatar speaking. The mouth will move aligned to spoken words where supported.</textarea>
+
+      <label for="avatarUrl">Avatar (photo) URL</label>
+      <input id="avatarUrl" placeholder="https://example.com/person.jpg" value="https://i.ibb.co/7n0V9Pz/man-face.jpg" />
+
+      <div class="controls">
+        <div style="flex:1">
+          <label for="duration">Duration (sec)</label>
+          <input id="duration" type="number" min="2" max="60" value="6" />
+        </div>
+        <div style="width:130px">
+          <label for="res">Resolution</label>
+          <select id="res">
+            <option value="640x360">640×360</option>
+            <option value="854x480">854×480</option>
+            <option value="1280x720" selected>1280×720</option>
+          </select>
+        </div>
+      </div>
+
+      <label for="bg">Background color</label>
+      <input id="bg" type="color" value="#071226" />
+
+      <button id="generate">Generate & Speak</button>
+      <div id="status" class="muted" aria-live="polite"></div>
+
+      <div class="note">Note: video file will not contain audio (browser limitation). For an audio+video file you'd need server-side merging.</div>
+    </div>
+
+    <div class="card">
+      <h1 style="font-size:16px;margin-bottom:6px">Preview & Download</h1>
+      <video id="player" controls playsinline></video>
+      <canvas id="canvas" style="display:none"></canvas>
+      <div style="margin-top:10px;display:flex;gap:8px;align-items:center;">
+        <a id="download" style="display:none" class="muted" download="avatar-video.webm">Download</a>
+        <div id="info" class="muted"></div>
+      </div>
+    </div>
+  </div>
 
 <script>
-const promptEl=document.getElementById('prompt');
-const avatarEl=document.getElementById('avatarUrl');
-const canvas=document.getElementById('canvas');
-const player=document.getElementById('player');
-const statusEl=document.getElementById('status');
-const downloadEl=document.getElementById('download');
-const btn=document.getElementById('generate');
+/* Robust single-file implementation:
+   - Uses SpeechSynthesisUtterance.onboundary where available for word-level sync
+   - Falls back to estimated timing if boundary events are missing
+   - Starts recording once speaking begins to ensure mouth animation captured
+   - Handles MediaRecorder mime fallback
+*/
 
-async function makeTalkingAvatar(){
-  const text=promptEl.value.trim()||'Hello there!';
-  const avatarUrl=avatarEl.value.trim();
-  const w=640,h=480;
-  canvas.width=w;canvas.height=h;
-  const ctx=canvas.getContext('2d');
+const promptEl = document.getElementById('prompt');
+const avatarUrlEl = document.getElementById('avatarUrl');
+const durationEl = document.getElementById('duration');
+const resEl = document.getElementById('res');
+const bgEl = document.getElementById('bg');
+const generateBtn = document.getElementById('generate');
+const statusEl = document.getElementById('status');
+const player = document.getElementById('player');
+const canvas = document.getElementById('canvas');
+const downloadLink = document.getElementById('download');
+const info = document.getElementById('info');
 
-  // Load image
-  const img=new Image();
-  img.crossOrigin='anonymous';
-  img.src=avatarUrl;
-  await new Promise(r=>img.onload=r);
+function parseRes(v){ const [w,h] = v.split('x').map(Number); return {w,h}; }
 
-  // Setup recorder
-  const fps=30;
-  const stream=canvas.captureStream(fps);
-  const chunks=[];
-  const rec=new MediaRecorder(stream,{mimeType:'video/webm;codecs=vp9'});
-  rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
-  rec.start();
-
-  // Start speaking
-  const utter=new SpeechSynthesisUtterance(text);
-  utter.pitch=1; utter.rate=1; utter.volume=1;
-  let speaking=true;
-  utter.onend=()=>speaking=false;
-  speechSynthesis.cancel();
-  speechSynthesis.speak(utter);
-
-  // Estimate duration
-  const estDuration=Math.max(3,text.split(' ').length/2);
-  const totalFrames=Math.floor(estDuration*fps);
-  statusEl.textContent='Speaking... (watch avatar move)';
-
-  for(let f=0;f<totalFrames;f++){
-    ctx.drawImage(img,0,0,w,h);
-    // Simulate mouth movement if still speaking
-    if(speaking){
-      const mouthY=h*0.7;
-      const mouthW=w*0.15;
-      const mouthH=10+Math.random()*20;
-      ctx.fillStyle='#000';
-      ctx.beginPath();
-      ctx.ellipse(w/2,mouthY,mouthW,mouthH,0,0,Math.PI*2);
-      ctx.fill();
-    }
-    await new Promise(r=>setTimeout(r,1000/fps));
-  }
-
-  rec.stop();
-  await new Promise(r=>rec.onstop=r);
-  const blob=new Blob(chunks,{type:'video/webm'});
-  const url=URL.createObjectURL(blob);
-  player.src=url;
-  player.play();
-  downloadEl.href=url;
-  downloadEl.style.display='inline-block';
-  downloadEl.textContent=`Download (${Math.round(blob.size/1024)} KB)`;
-  statusEl.textContent='Done (Video ready — note: no audio due to browser limits)';
+function chooseMime(){
+  const candidates = [
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm'
+  ];
+  for(const m of candidates) if(MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m)) return m;
+  return ''; // let browser choose default
 }
 
-btn.onclick=()=>{
-  btn.disabled=true;
-  makeTalkingAvatar().catch(e=>statusEl.textContent='Error: '+e)
-    .finally(()=>btn.disabled=false);
-};
+// Helper: wait for speech to start producing any boundary or onstart event
+function waitForSpeakStart(utter){
+  return new Promise((resolve, reject)=>{
+    let started = false;
+    const startT = setTimeout(()=> {
+      if(!started){ started = true; resolve(); }
+    }, 800); // fallback if no event comes
+
+    utter.onstart = ()=>{ started = true; clearTimeout(startT); resolve(); };
+    // some browsers provide onboundary quickly; we don't need to force on it
+    // safety: if utter throws error
+    utter.onerror = (e)=>{ clearTimeout(startT); reject(e); };
+  });
+}
+
+async function generateClientSideVideo(){
+  generateBtn.disabled = true;
+  statusEl.textContent = 'Preparing...';
+  downloadLink.style.display = 'none';
+  player.removeAttribute('src');
+
+  const text = promptEl.value.trim() || 'Hello, this is a talking avatar demo.';
+  const avatarUrl = avatarUrlEl.value.trim();
+  const durationManual = Math.max(2, Number(durationEl.value)||6);
+  const {w,h} = parseRes(resEl.value);
+  const bg = bgEl.value;
+
+  // load image
+  statusEl.textContent = 'Loading avatar image...';
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.src = avatarUrl || '';
+  try {
+    await new Promise((res, rej) => {
+      img.onload = res;
+      img.onerror = () => rej(new Error('Failed to load avatar image. Check URL or CORS.'));
+      // if empty src, resolve: draw a placeholder
+      if(!avatarUrl) setTimeout(res, 200);
+    });
+  } catch(err){
+    statusEl.textContent = 'Image load error — falling back to placeholder.';
+    console.warn(err);
+    // draw placeholder later if image failed
+  }
+
+  // prepare canvas
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+
+  // TTS utterance
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.rate = 1;
+  utter.pitch = 1;
+  utter.volume = 1;
+
+  // Attempt to use boundary events for improved sync
+  let lastBoundaryTime = 0;
+  let boundaries = []; // {charIndex, elapsedTime}
+  let boundarySupported = false;
+
+  utter.onboundary = (ev) => {
+    // ev.charIndex, ev.name, ev.elapsedTime (not always present)
+    boundarySupported = true;
+    boundaries.push({charIndex: ev.charIndex, elapsedTime: ev.elapsedTime});
+    lastBoundaryTime = performance.now();
+  };
+
+  // If boundary not supported, we'll estimate durations by word count
+  const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
+  const estimatedSpeechDuration = Math.max(1.2, wordCount / 2.8); // rough words/sec estimate
+
+  // Track speaking state
+  let speaking = false;
+  utter.onstart = ()=> { speaking = true; statusEl.textContent = 'Speech started'; };
+  utter.onend = ()=> { speaking = false; statusEl.textContent = 'Speech ended'; };
+
+  // Start TTS (requires user gesture — we are inside button click)
+  window.speechSynthesis.cancel(); // stop previous
+  window.speechSynthesis.speak(utter);
+
+  // Wait for speech to actually start (onstart) or fallback
+  try{ await waitForSpeakStart(utter); } catch(e){ console.warn('speech start wait error', e); }
+
+  // Now prepare MediaRecorder
+  statusEl.textContent = 'Starting recording... (video will be visual only)';
+  const fps = 30;
+  const stream = canvas.captureStream(fps);
+  const mimeType = chooseMime();
+  let recorder;
+  try {
+    recorder = mimeType ? new MediaRecorder(stream, {mimeType}) : new MediaRecorder(stream);
+  } catch(e) {
+    // Fallback: try without specifying mimeType
+    try { recorder = new MediaRecorder(stream); }
+    catch(err) { throw new Error('MediaRecorder not supported in this browser: ' + err.message); }
+  }
+
+  const chunks = [];
+  recorder.ondataavailable = (ev) => { if(ev.data && ev.data.size) chunks.push(ev.data); };
+  const recStopPromise = new Promise(res => recorder.onstop = res);
+
+  recorder.start();
+  statusEl.textContent = 'Recording (visual) — avatar is speaking now.';
+
+  // Sync logic:
+  // If onboundary supported, open mouth when a boundary happens and close in between.
+  // Otherwise we estimate mouth movement using a simple time-based envelope.
+  let mouthLevel = 0; // 0 = closed, >0 open
+  const mouthDecay = 0.88; // how quickly mouth closes per frame
+  let lastBoundaryFrameTime = performance.now();
+  const totalFrames = Math.max(Math.round((boundarySupported ? (utter.elapsedTime || estimatedSpeechDuration) : durationManual) * fps), Math.round(durationManual * fps));
+
+  // We'll render for either (a) the estimated speech duration (if boundaries not available) or (b) until utter.onend + small buffer
+  // Better approach: render until speech ends AND a small buffer after.
+  let framesRendered = 0;
+  const bufferAfterSpeechSec = 0.6;
+  let endedAndBuffered = false;
+  let postEndFramesToDo = Math.round(bufferAfterSpeechSec * fps);
+
+  // We'll use a loop that continues until (speaking===false && postEndFramesToDo<=0)
+  const frameDelay = 1000 / fps;
+  while(true){
+    const loopStart = performance.now();
+
+    // draw background
+    ctx.fillStyle = bg || '#071226';
+    ctx.fillRect(0,0,w,h);
+
+    // draw avatar (center crop/fit)
+    if(img && img.complete && img.naturalWidth){
+      // Fit image into center square area, keep aspect ratio
+      const targetW = Math.min(w * 0.72, 800);
+      const targetH = targetW * (img.naturalHeight / img.naturalWidth);
+      const ax = (w - targetW) / 2;
+      const ay = (h - targetH) / 2 - 20;
+      ctx.drawImage(img, ax, ay, targetW, targetH);
+      // compute mouth baseline region based on drawn area
+      var mouthX = w/2;
+      var mouthY = ay + targetH * 0.78;
+      var mouthW = targetW * 0.16;
+    } else {
+      // placeholder: neutral circle + simple face
+      const cx = w/2, cy = h/2;
+      const r = Math.min(w,h) * 0.32;
+      ctx.fillStyle = '#f4e9de';
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle='#000';
+      ctx.beginPath(); ctx.arc(cx - r*0.35, cy - r*0.15, r*0.08, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx + r*0.35, cy - r*0.15, r*0.08, 0, Math.PI*2); ctx.fill();
+      var mouthX = cx;
+      var mouthY = cy + r*0.45;
+      var mouthW = r*0.35;
+    }
+
+    // update mouthLevel using boundary info or estimate
+    if(boundarySupported && boundaries.length>0){
+      // If new boundary events have arrived since last frame, boost mouthLevel
+      // (boundaries are pushed during speech via onboundary)
+      if(performance.now() - lastBoundaryTime < 250){ // recent boundary
+        mouthLevel = Math.min(1.0, mouthLevel + 0.35 + Math.random()*0.4);
+      } else {
+        // decay
+        mouthLevel *= mouthDecay;
+      }
+    } else {
+      // fallback: estimate based on remaining time until utter end if available else loop random while speaking
+      if(speaking){
+        mouthLevel = Math.min(1.0, mouthLevel + 0.25 + Math.random()*0.4);
+      } else {
+        mouthLevel *= mouthDecay;
+      }
+    }
+
+    // draw mouth (ellipse)
+    const openH = 4 + mouthLevel * (Math.max(8, mouthW*0.35));
+    ctx.fillStyle = '#000';
+    ctx.beginPath();
+    ctx.ellipse(mouthX, mouthY, mouthW, openH, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    // Draw overlay text (optional small caption)
+    ctx.font = `600 ${Math.max(16, Math.round(w/36))}px Inter, Arial`;
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.textAlign = 'center';
+    // split into lines if wide
+    const textMaxWidth = w * 0.86;
+    const words = text.split(' ');
+    let lines = [], cur = '';
+    for(const word of words){
+      const test = cur ? cur + ' ' + word : word;
+      if(ctx.measureText(test).width > textMaxWidth){
+        if(cur) lines.push(cur);
+        cur = word;
+      } else cur = test;
+    }
+    if(cur) lines.push(cur);
+    for(let i=0;i<lines.length;i++){
+      ctx.fillText(lines[i], w/2, h - 30 - (lines.length-1-i)*24);
+    }
+
+    framesRendered++;
+    // termination condition: if speech ended and we've recorded the buffer
+    if(!speaking){
+      if(postEndFramesToDo > 0){
+        postEndFramesToDo--;
+      } else {
+        // stop condition reached
+        break;
+      }
+    }
+
+    // wait until next frame
+    const elapsed = performance.now() - loopStart;
+    const wait = Math.max(0, frameDelay - elapsed);
+    await new Promise(r => setTimeout(r, wait));
+  }
+
+  // stop recorder
+  recorder.stop();
+  await recStopPromise;
+
+  // create blob + url
+  const blob = new Blob(chunks, {type: (mimeType || 'video/webm')});
+  const url = URL.createObjectURL(blob);
+  player.src = url;
+  player.play().catch(()=>{});
+  downloadLink.href = url;
+  downloadLink.style.display = 'inline';
+  const kb = Math.round(blob.size / 1024);
+  downloadLink.textContent = `Download video — ${kb} KB (visual only)`;
+  info.textContent = `${w}×${h} • visual ${Math.round((framesRendered/30)*10)/10}s recorded`;
+
+  statusEl.textContent = 'Done — visual video ready. (Audio played live via speechSynthesis.)';
+  generateBtn.disabled = false;
+}
+
+// Wire button
+generateBtn.addEventListener('click', async () => {
+  try {
+    // quick feature detection
+    if(!('speechSynthesis' in window)) {
+      alert('speechSynthesis not supported in this browser. Use Chrome or Edge for best results.');
+      return;
+    }
+    if(!('MediaRecorder' in window)){
+      alert('MediaRecorder not available in this browser — cannot produce video.');
+      return;
+    }
+    await generateClientSideVideo();
+  } catch (err) {
+    console.error(err);
+    statusEl.textContent = 'Error: ' + (err.message || err);
+    generateBtn.disabled = false;
+  }
+});
 </script>
 </body>
 </html>
+
 
 
 
