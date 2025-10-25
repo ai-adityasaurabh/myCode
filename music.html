@@ -1,365 +1,180 @@
 <!doctype html>
 <html>
 <head>
-  <meta charset="utf-8" />
-  <title>Lyrics + Notes → Song (.wav) — Only JS</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;max-width:900px;margin:24px auto;padding:0 18px;color:#111}
-    h1{font-size:20px;margin-bottom:6px}
-    label{display:block;margin-top:12px;font-weight:600}
-    textarea, input, select{width:100%;box-sizing:border-box;padding:8px;margin-top:6px;border-radius:6px;border:1px solid #ccc}
-    button{margin-top:12px;padding:10px 14px;border-radius:8px;border:0;background:#0066ff;color:white;font-weight:600}
-    .small{font-size:13px;color:#444}
-    .row{display:flex;gap:8px}
-    .col{flex:1}
-    pre{background:#f7f7f7;padding:10px;border-radius:8px;overflow:auto}
-    .warn{background:#fff4e5;padding:10px;border-radius:8px;border:1px solid #ffd8a8}
-  </style>
+<meta charset="utf-8">
+<title>Hindi Song Generator (only JS)</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+body{font-family:system-ui,Roboto,Arial;margin:24px auto;max-width:900px;padding:0 18px;color:#111}
+h1{font-size:22px;margin-bottom:6px}
+textarea,input,select{width:100%;padding:8px;margin-top:6px;border:1px solid #ccc;border-radius:6px;box-sizing:border-box}
+button{margin-top:12px;padding:10px 14px;border:0;border-radius:8px;font-weight:600;color:#fff;background:#0066ff}
+.small{font-size:13px;color:#444}
+.warn{background:#fff4e5;border:1px solid #ffd8a8;padding:10px;border-radius:8px;margin-top:12px}
+</style>
 </head>
 <body>
-  <h1>Lyrics + Notes → Song (.wav) (client-side)</h1>
-  <div class="small">Enter lyrics + notes, choose a tone. When you press <strong>Generate & Record</strong> you'll be prompted to share this tab (choose this tab and allow audio). After playing, a WAV download will appear.</div>
+<h1>🎵 Hindi Lyrics + Notes → Song (.wav)</h1>
 
-  <label>Lyrics (text to be spoken)
-    <textarea id="lyrics" rows="5" placeholder="Type the lyrics here...">Hello, this is a demo. The notes will play in time with these words.</textarea>
-  </label>
+<div class="small">Enter Hindi lyrics and simple notes. Choose a tone, then click <b>Generate & Record</b>.  
+When prompted, select <b>this tab</b> and allow audio capture.</div>
 
-  <label>Notes (format: NOTE:DURATION_SECONDS separated by spaces or newlines)
-    <textarea id="notes" rows="4" placeholder="E.g. C4:0.5 D4:0.5 E4:1">C4:0.5 D4:0.5 E4:1 G4:1.5 C5:1</textarea>
-  </label>
-  <div class="row">
-    <div class="col">
-      <label>Tone / Waveform
-        <select id="waveform">
-          <option value="sine">Sine (smooth)</option>
-          <option value="triangle">Triangle (soft)</option>
-          <option value="square">Square (buzzier)</option>
-          <option value="sawtooth">Sawtooth (bright)</option>
-        </select>
-      </label>
-    </div>
-    <div class="col">
-      <label>Tempo multiplier (affects note durations)
-        <input id="tempo" type="number" step="0.1" value="1" />
-      </label>
-    </div>
-  </div>
+<label>Lyrics (Hindi text)</label>
+<textarea id="lyrics" rows="5">तेरी मुस्कान से रोशन है, ये दिल मेरा।
+हर धड़कन में बसा है नाम तेरा।
+सपनों में आता है, सवेरा सा तू।
+मेरी दुनिया में बस, है प्यार तू।</textarea>
 
-  <label>Speech voice rate (how fast the TTS speaks)
-    <input id="speechRate" type="number" step="0.1" value="1" />
-  </label>
+<label>Notes (e.g. C4:0.5 D4:1)</label>
+<textarea id="notes" rows="4">C4:0.5 D4:0.5 E4:1 G4:1
+A4:0.5 G4:0.5 F4:1 E4:1
+D4:0.5 E4:0.5 F4:1 G4:1
+E4:1 D4:1 C4:2</textarea>
 
-  <div class="warn">
-    Browser requirement: best results in Chrome/Edge. When prompted to share, <strong>select the current tab</strong> and enable audio. The tab capture permission is required to save the spoken audio + generated tones into the WAV file.
-  </div>
+<label>Tone / Waveform</label>
+<select id="waveform">
+  <option value="sine">Sine (smooth)</option>
+  <option value="triangle">Triangle</option>
+  <option value="square">Square</option>
+  <option value="sawtooth">Sawtooth</option>
+</select>
 
-  <button id="generateBtn">Generate & Record (Play + Record tab audio → WAV)</button>
-  <button id="playOnlyBtn" style="background:#2d9f2d">Play Only (no record)</button>
+<label>Tempo multiplier</label>
+<input id="tempo" type="number" value="1" step="0.1">
 
-  <div id="status" class="small" style="margin-top:12px"></div>
-  <div id="downloadArea" style="margin-top:12px"></div>
+<label>Speech rate</label>
+<input id="speechRate" type="number" value="0.9" step="0.1">
 
-  <script>
-  // --- Utility: note name to frequency (A4=440)
-  function noteToFrequency(note) {
-    // note like C4, A#3, Bb3
-    if (!note) return 0;
-    const noteRegex = /^([A-Ga-g])([#b]?)(-?\\d+)$/;
-    const m = note.match(noteRegex);
-    if (!m) return 0;
-    let [, letter, accidental, octave] = m;
-    letter = letter.toUpperCase();
-    octave = parseInt(octave,10);
-    const semitoneFromC = { 'C':0,'D':2,'E':4,'F':5,'G':7,'A':9,'B':11 }[letter];
-    let semitone = semitoneFromC;
-    if (accidental === '#') semitone++;
-    if (accidental === 'b') semitone--;
-    // MIDI note number: C4 is MIDI 60. A4 is 69 -> 440 Hz
-    const midi = (octave + 1) * 12 + semitone;
-    const freq = 440 * Math.pow(2, (midi - 69)/12);
-    return freq;
-  }
+<div class="warn">⚠️ Works best in Chrome/Edge. When asked, select <b>this tab</b> and enable audio.  
+Then you’ll get a <b>Download WAV</b> link.</div>
 
-  // parse notes string into [{freq, dur}]
-  function parseNotes(text, tempo=1) {
-    // lines/spaces, allow rests as R:duration or rest:duration
-    const parts = text.trim().split(/\\s+/);
-    const out = [];
-    for (const p of parts) {
-      if (!p) continue;
-      const [raw, rawdur] = p.split(':');
-      let dur = parseFloat(rawdur||'1')/tempo;
-      if (isNaN(dur) || dur <= 0) dur = 1/tempo;
-      if (/^r$/i.test(raw) || /^rest$/i.test(raw)) {
-        out.push({freq:0, dur});
-      } else {
-        // allow multi note like C4 or C#4 or Db4
-        out.push({freq: noteToFrequency(raw), dur});
-      }
-    }
-    return out;
-  }
+<button id="generateBtn">Generate & Record (WAV)</button>
+<button id="playOnlyBtn" style="background:#2da52d">Play Only</button>
 
-  // schedule notes on an AudioContext and return Promise that resolves when done
-  function playNotesWithOscillator(audioCtx, notes, waveform, destination) {
-    return new Promise((resolve) => {
-      const now = audioCtx.currentTime + 0.05; // small start delay
-      let t = now;
-      const masterGain = audioCtx.createGain();
-      masterGain.gain.value = 0.18; // global volume
-      masterGain.connect(destination || audioCtx.destination);
+<div id="status" class="small" style="margin-top:12px"></div>
+<div id="downloadArea" style="margin-top:12px"></div>
 
-      for (let i=0;i<notes.length;i++){
-        const n = notes[i];
-        const dur = n.dur;
-        if (n.freq > 0) {
-          const osc = audioCtx.createOscillator();
-          osc.type = waveform;
-          osc.frequency.setValueAtTime(n.freq, t);
-          const amp = audioCtx.createGain();
-          // quick ADSR-ish envelope
-          amp.gain.setValueAtTime(0.0001, t);
-          amp.gain.exponentialRampToValueAtTime(1.0, t + 0.02);
-          amp.gain.exponentialRampToValueAtTime(0.0001, t + dur - 0.02);
-          osc.connect(amp);
-          amp.connect(masterGain);
-          osc.start(t);
-          osc.stop(t + dur + 0.05);
-        }
-        t += dur;
-      }
-      const totalDur = t - now;
-      setTimeout(()=>resolve(), totalDur*1000 + 200);
-    });
-  }
-
-  // convert recorded blob (webm/ogg) into WAV (Float32 -> 16-bit PCM)
-  async function blobToWavAndDownload(blob, filename='song.wav') {
-    const arrayBuffer = await blob.arrayBuffer();
-    const ac = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 1, 44100);
-    const decoded = await new Promise((res, rej) => {
-      const decodeCtx = new (window.AudioContext || window.webkitAudioContext)();
-      decodeCtx.decodeAudioData(arrayBuffer.slice(0), (buffer) => {
-        res(buffer);
-        decodeCtx.close && decodeCtx.close();
-      }, (e)=>{ rej(e); });
-    });
-    // get merged mono
-    const numChannels = decoded.numberOfChannels;
-    const len = decoded.length;
-    const sampleRate = decoded.sampleRate;
-    const interleaved = new Float32Array(len * 1);
-    // mixdown to mono
-    for (let i=0;i<len;i++){
-      let sum = 0;
-      for (let ch=0; ch<numChannels; ch++) sum += decoded.getChannelData(ch)[i] || 0;
-      interleaved[i] = sum / Math.max(1, numChannels);
-    }
-    // convert float32 [-1,1] to 16-bit PCM
-    const wavBuffer = encodeWAV(interleaved, sampleRate);
-    const wavBlob = new Blob([wavBuffer], { type: 'audio/wav' });
-    const url = URL.createObjectURL(wavBlob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.textContent = 'Download WAV';
-    a.style.display = 'inline-block';
-    a.style.marginTop = '8px';
-    document.getElementById('downloadArea').innerHTML = '';
-    document.getElementById('downloadArea').appendChild(a);
-  }
-
-  function encodeWAV(samples, sampleRate) {
-    const buffer = new ArrayBuffer(44 + samples.length * 2);
-    const view = new DataView(buffer);
-    /* RIFF identifier */
-    writeString(view, 0, 'RIFF');
-    /* file length */
-    view.setUint32(4, 36 + samples.length * 2, true);
-    /* RIFF type */
-    writeString(view, 8, 'WAVE');
-    /* format chunk identifier */
-    writeString(view, 12, 'fmt ');
-    /* format chunk length */
-    view.setUint32(16, 16, true);
-    /* sample format (raw) */
-    view.setUint16(20, 1, true);
-    /* channel count */
-    view.setUint16(22, 1, true);
-    /* sample rate */
-    view.setUint32(24, sampleRate, true);
-    /* byte rate (sampleRate * blockAlign) */
-    view.setUint32(28, sampleRate * 2, true);
-    /* block align (channelCount * bytesPerSample) */
-    view.setUint16(32, 2, true);
-    /* bits per sample */
-    view.setUint16(34, 16, true);
-    /* data chunk identifier */
-    writeString(view, 36, 'data');
-    /* data chunk length */
-    view.setUint32(40, samples.length * 2, true);
-
-    // write the PCM samples
-    let offset = 44;
-    for (let i = 0; i < samples.length; i++, offset += 2) {
-      let s = Math.max(-1, Math.min(1, samples[i]));
-      s = s < 0 ? s * 0x8000 : s * 0x7FFF;
-      view.setInt16(offset, s, true);
-    }
-    return view;
-  }
-
-  function writeString(view, offset, string) {
-    for (let i = 0; i < string.length; i++){
-      view.setUint8(offset + i, string.charCodeAt(i));
-    }
-  }
-
-  // Schedule speech and notes together. We'll:
-  // - create AudioContext and schedule oscillator notes to play through it
-  // - start speechSynthesis.speak at the same time (relative start offset)
-  // - use getDisplayMedia to capture tab audio (user will pick this tab)
-  // - record via MediaRecorder
-  async function playAndRecord({lyrics, notesText, waveform, tempo, speechRate}) {
-    document.getElementById('status').textContent = 'Preparing audio context...';
-    // Parse notes
-    const notes = parseNotes(notesText, tempo);
-
-    // Create AudioContext
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    // Create a destination that connects to the page audio output
-    // To make the generated oscillator audible in the tab audio captured by getDisplayMedia,
-    // connect oscillator to audioCtx.destination (the tab output).
-    const destination = audioCtx.destination;
-
-    // Determine total time
-    const totalSeconds = notes.reduce((s,n)=>s+n.dur, 0) + 0.5;
-
-    // request tab capture (must be triggered by user gesture)
-    document.getElementById('status').textContent = 'Requesting permission to capture this tab audio... Please select this tab and allow audio.';
-    let captureStream;
-    try {
-      // Some browsers require video:true to capture tab audio. We'll request both.
-      captureStream = await navigator.mediaDevices.getDisplayMedia({ audio: true, video: true });
-    } catch (e) {
-      console.error(e);
-      document.getElementById('status').textContent = 'Screen/tab share was denied or failed. Recording cancelled. You can still Play Only.';
-      audioCtx.close && audioCtx.close();
-      return;
-    }
-
-    document.getElementById('status').textContent = 'Recording started — playing now...';
-
-    // Create MediaRecorder from the captured stream
-    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus'
-                  : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm'
-                  : 'audio/webm';
-    const recorder = new MediaRecorder(captureStream, { mimeType });
-
-    const chunks = [];
-    recorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
-    const stopped = new Promise((res) => recorder.onstop = res);
-
-    recorder.start();
-
-    // Slight delay to ensure recorder started
-    await new Promise(r => setTimeout(r, 150));
-
-    // Play notes (synth) and speak lyrics
-    const playPromise = playNotesWithOscillator(audioCtx, notes, waveform, destination);
-
-    // Prepare speech utterance
-    const utter = new SpeechSynthesisUtterance(lyrics);
-    utter.rate = speechRate || 1;
-    // Align start: start speech about at same time as synth.
-    // However speechSynthesis.speak is asynchronous; we call it now to start speaking while synth plays.
-    window.speechSynthesis.cancel(); // stop any previous
-    window.speechSynthesis.speak(utter);
-
-    // Wait for both to finish
-    await playPromise;
-
-    // give speechSynth a small buffer to finish
-    await new Promise(r => setTimeout(r, 600));
-
-    // stop recorder
-    recorder.stop();
-
-    // Some browsers keep the tab sharing active until track stopped. Stop tracks.
-    captureStream.getTracks().forEach(t => t.stop());
-
-    // wait until recorder.onstop
-    await stopped;
-
-    const blob = new Blob(chunks, { type: mimeType });
-    document.getElementById('status').textContent = 'Recording finished. Converting to WAV...';
-    await blobToWavAndDownload(blob, 'song.wav');
-    document.getElementById('status').textContent = 'Done — WAV ready.';
-    audioCtx.close && audioCtx.close();
-  }
-
-  // Play only (no recording) — uses same scheduling but not capturing
-  async function playOnly({lyrics, notesText, waveform, tempo, speechRate}) {
-    document.getElementById('status').textContent = 'Preparing audio...';
-    const notes = parseNotes(notesText, tempo);
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const destination = audioCtx.destination;
-    await new Promise(r => setTimeout(r, 60));
-    document.getElementById('status').textContent = 'Playing...';
-    const playPromise = playNotesWithOscillator(audioCtx, notes, waveform, destination);
-    // speak
-    const utter = new SpeechSynthesisUtterance(lyrics);
-    utter.rate = speechRate || 1;
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utter);
-    await playPromise;
-    await new Promise(r => setTimeout(r, 300));
-    document.getElementById('status').textContent = 'Playback finished.';
-    audioCtx.close && audioCtx.close();
-  }
-
-  // Wire up UI
-  document.getElementById('generateBtn').addEventListener('click', async () => {
-    document.getElementById('downloadArea').innerHTML = '';
-    const lyrics = document.getElementById('lyrics').value || '';
-    const notesText = document.getElementById('notes').value || '';
-    const waveform = document.getElementById('waveform').value || 'sine';
-    const tempo = parseFloat(document.getElementById('tempo').value) || 1;
-    const speechRate = parseFloat(document.getElementById('speechRate').value) || 1;
-    // Disable buttons while running
-    document.getElementById('generateBtn').disabled = true;
-    document.getElementById('playOnlyBtn').disabled = true;
-    try {
-      await playAndRecord({lyrics, notesText, waveform, tempo, speechRate});
-    } catch (e) {
-      console.error(e);
-      document.getElementById('status').textContent = 'Error: ' + (e && e.message ? e.message : e);
-    } finally {
-      document.getElementById('generateBtn').disabled = false;
-      document.getElementById('playOnlyBtn').disabled = false;
-    }
+<script>
+// --- helpers ---
+function noteToFrequency(note){
+  const m=note.match(/^([A-Ga-g])([#b]?)(-?\d+)$/); if(!m)return 0;
+  let[,l,a,o]=m;l=l.toUpperCase();o=parseInt(o);
+  const semis={C:0,D:2,E:4,F:5,G:7,A:9,B:11}[l];let s=semis;
+  if(a=='#')s++; if(a=='b')s--;
+  const midi=(o+1)*12+s; return 440*Math.pow(2,(midi-69)/12);
+}
+function parseNotes(txt,tempo=1){
+  return txt.trim().split(/\s+/).map(p=>{
+    const [n,d]=p.split(':'); let dur=parseFloat(d||1)/tempo;
+    if(!dur||dur<=0)dur=1/tempo;
+    if(/^r$/i.test(n)||/^rest$/i.test(n))return{freq:0,dur};
+    return{freq:noteToFrequency(n),dur};
   });
-
-  document.getElementById('playOnlyBtn').addEventListener('click', async () => {
-    const lyrics = document.getElementById('lyrics').value || '';
-    const notesText = document.getElementById('notes').value || '';
-    const waveform = document.getElementById('waveform').value || 'sine';
-    const tempo = parseFloat(document.getElementById('tempo').value) || 1;
-    const speechRate = parseFloat(document.getElementById('speechRate').value) || 1;
-    document.getElementById('generateBtn').disabled = true;
-    document.getElementById('playOnlyBtn').disabled = true;
-    try {
-      await playOnly({lyrics, notesText, waveform, tempo, speechRate});
-    } catch(e) {
-      console.error(e);
-      document.getElementById('status').textContent = 'Error: ' + (e && e.message ? e.message : e);
-    } finally {
-      document.getElementById('generateBtn').disabled = false;
-      document.getElementById('playOnlyBtn').disabled = false;
+}
+function playNotesWithOscillator(ctx,notes,wave,dest){
+  return new Promise(res=>{
+    const now=ctx.currentTime+0.05; let t=now;
+    const mg=ctx.createGain(); mg.gain.value=0.2; mg.connect(dest);
+    for(const n of notes){
+      if(n.freq>0){
+        const o=ctx.createOscillator(); o.type=wave; o.frequency.setValueAtTime(n.freq,t);
+        const g=ctx.createGain(); g.gain.setValueAtTime(0.0001,t);
+        g.gain.exponentialRampToValueAtTime(1,t+0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001,t+n.dur-0.02);
+        o.connect(g); g.connect(mg); o.start(t); o.stop(t+n.dur+0.05);
+      }
+      t+=n.dur;
     }
+    setTimeout(()=>res(),(t-now)*1000+100);
   });
+}
+function writeStr(v,off,s){for(let i=0;i<s.length;i++)v.setUint8(off+i,s.charCodeAt(i));}
+function encodeWAV(samples,rate){
+  const b=new ArrayBuffer(44+samples.length*2),v=new DataView(b);
+  writeStr(v,0,'RIFF');v.setUint32(4,36+samples.length*2,true);
+  writeStr(v,8,'WAVE');writeStr(v,12,'fmt ');
+  v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
+  v.setUint32(24,rate,true);v.setUint32(28,rate*2,true);v.setUint16(32,2,true);
+  v.setUint16(34,16,true);writeStr(v,36,'data');v.setUint32(40,samples.length*2,true);
+  let off=44;for(let i=0;i<samples.length;i++,off+=2){
+    let s=Math.max(-1,Math.min(1,samples[i]));s=s<0?s*0x8000:s*0x7FFF;
+    v.setInt16(off,s,true);
+  }return v;
+}
+async function blobToWavAndDownload(blob){
+  const buf=await blob.arrayBuffer();
+  const ac=new (window.AudioContext||window.webkitAudioContext)();
+  const dec=await ac.decodeAudioData(buf.slice(0));
+  const len=dec.length,rate=dec.sampleRate;
+  const data=new Float32Array(len);
+  for(let i=0;i<len;i++){let sum=0;for(let ch=0;ch<dec.numberOfChannels;ch++)sum+=dec.getChannelData(ch)[i]||0;data[i]=sum/dec.numberOfChannels;}
+  const wav=encodeWAV(data,rate);
+  const wavBlob=new Blob([wav],{type:'audio/wav'});
+  const url=URL.createObjectURL(wavBlob);
+  const a=document.createElement('a');a.href=url;a.download='song.wav';a.textContent='⬇️ Download WAV';
+  document.getElementById('downloadArea').innerHTML='';document.getElementById('downloadArea').appendChild(a);
+  ac.close();
+}
 
-  </script>
+// --- main: play + record ---
+async function playAndRecord({lyrics,notesText,waveform,tempo,speechRate}){
+  document.getElementById('status').textContent='Setting up audio...';
+  const notes=parseNotes(notesText,tempo);
+  const ctx=new (window.AudioContext||window.webkitAudioContext)();
+  const msDest=ctx.createMediaStreamDestination();
+  let audio=document.getElementById('__out'); if(!audio){audio=document.createElement('audio');audio.id='__out';audio.style.display='none';document.body.appendChild(audio);}
+  audio.srcObject=msDest.stream; await ctx.resume();
+
+  // Ask for tab capture
+  document.getElementById('status').textContent='Share this tab and allow audio.';
+  let cap;
+  try{cap=await navigator.mediaDevices.getDisplayMedia({audio:true,video:true});}
+  catch(e){document.getElementById('status').textContent='Permission denied.';return;}
+
+  const rec=new MediaRecorder(cap,{mimeType:'audio/webm'});
+  const chunks=[]; rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data);};
+  const stopP=new Promise(r=>rec.onstop=r); rec.start(); await new Promise(r=>setTimeout(r,200));
+
+  await audio.play().catch(()=>{});
+  const synthP=playNotesWithOscillator(ctx,notes,waveform,msDest);
+  const utt=new SpeechSynthesisUtterance(lyrics); utt.rate=speechRate; speechSynthesis.cancel(); speechSynthesis.speak(utt);
+  await synthP; await new Promise(r=>setTimeout(r,700));
+
+  rec.stop(); cap.getTracks().forEach(t=>t.stop()); await stopP;
+  document.getElementById('status').textContent='Converting to WAV...';
+  await blobToWavAndDownload(new Blob(chunks,{type:'audio/webm'}));
+  document.getElementById('status').textContent='✅ Done';
+  ctx.close();
+}
+
+// --- play only ---
+async function playOnly({lyrics,notesText,waveform,tempo,speechRate}){
+  const notes=parseNotes(notesText,tempo);
+  const ctx=new (window.AudioContext||window.webkitAudioContext)();
+  const msDest=ctx.createMediaStreamDestination();
+  let audio=document.getElementById('__out'); if(!audio){audio=document.createElement('audio');audio.id='__out';audio.style.display='none';document.body.appendChild(audio);}
+  audio.srcObject=msDest.stream; await ctx.resume(); await audio.play().catch(()=>{});
+  document.getElementById('status').textContent='Playing...';
+  const synthP=playNotesWithOscillator(ctx,notes,waveform,msDest);
+  const utt=new SpeechSynthesisUtterance(lyrics); utt.rate=speechRate; speechSynthesis.cancel(); speechSynthesis.speak(utt);
+  await synthP; await new Promise(r=>setTimeout(r,500));
+  document.getElementById('status').textContent='Finished.';
+  ctx.close();
+}
+
+// --- UI ---
+generateBtn.onclick=async()=>{
+  downloadArea.innerHTML='';
+  const p={lyrics:lyrics.value,notesText:notes.value,waveform:waveform.value,tempo:parseFloat(tempo.value)||1,speechRate:parseFloat(speechRate.value)||1};
+  generateBtn.disabled=playOnlyBtn.disabled=true;
+  try{await playAndRecord(p);}catch(e){status.textContent='Error: '+e;}finally{generateBtn.disabled=playOnlyBtn.disabled=false;}
+};
+playOnlyBtn.onclick=async()=>{
+  const p={lyrics:lyrics.value,notesText:notes.value,waveform:waveform.value,tempo:parseFloat(tempo.value)||1,speechRate:parseFloat(speechRate.value)||1};
+  generateBtn.disabled=playOnlyBtn.disabled=true;
+  try{await playOnly(p);}catch(e){status.textContent='Error: '+e;}finally{generateBtn.disabled=playOnlyBtn.disabled=false;}
+};
+</script>
 </body>
 </html>
+
