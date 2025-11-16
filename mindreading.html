@@ -7,34 +7,42 @@
   <style>
     :root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,'Noto Sans',sans-serif}
     body{margin:12px;background:#0f172a;color:#e6eef8}
-    h1{font-size:20px;margin:0 0 8px}
+    h1{font-size:20px;margin:0 0 12px}
     .wrap{display:grid;grid-template-columns:380px 1fr 260px;gap:12px}
     .card{background:#0b1220;padding:12px;border-radius:12px;box-shadow:0 6px 18px rgba(2,6,23,.6)}
-    video{width:100%;height:auto;border-radius:8px;background:#000}
-    canvas{position:absolute;left:0;top:0}
+    .video-wrap{position:relative;border-radius:8px;overflow:hidden;background:#000}
+    video{width:100%;height:auto;display:block}
+    canvas{position:absolute;left:0;top:0;pointer-events:none}
     .controls{display:flex;gap:8px;margin-top:8px}
     button{background:#0ea5a9;border:none;padding:8px 12px;border-radius:8px;color:#042027;cursor:pointer}
+    button[disabled]{opacity:0.5;cursor:not-allowed}
     .numbers{display:flex;flex-wrap:wrap;gap:8px}
     .num{width:60px;height:60px;border-radius:8px;background:#071627;display:flex;align-items:center;justify-content:center;font-size:20px}
     .num.chosen{background:#065f46}
     .log{font-family:monospace;font-size:13px;line-height:1.4;max-height:560px;overflow:auto}
     .status{margin-top:8px}
+    .hint{font-size:13px;color:#9fb4c9}
+    .error{color:#ffb4b4;font-weight:600}
   </style>
 </head>
 <body>
   <h1>Mind-Reader Demo — Live Video + Face Tracking (JS + HTML)</h1>
   <div class="wrap">
     <div class="card">
-      <div style="position:relative">
+      <div class="video-wrap">
         <video id="video" autoplay muted playsinline></video>
-        <canvas id="overlay" width="640" height="480" style="position:absolute;right:0;top:0;pointer-events:none"></canvas>
+        <canvas id="overlay" width="640" height="480"></canvas>
       </div>
+
       <div class="controls">
-        <button id="startCam">Start Camera</button>
-        <button id="generate">Generate Numbers</button>
-        <button id="begin" disabled>Begin Read</button>
+        <button id="startCam">Start Camera (S)</button>
+        <button id="generate">Generate Numbers (G)</button>
+        <button id="begin" disabled>Begin Read (B)</button>
       </div>
+
       <div class="status" id="status">Status: Idle</div>
+      <div class="hint">Tip: Allow camera permissions. If video is visible but status shows error, model might have failed to load.</div>
+      <div id="cameraError" class="error" style="display:none;margin-top:6px"></div>
     </div>
 
     <div class="card" style="padding:18px;">
@@ -56,7 +64,7 @@
     <div class="card">
       <h3 style="margin-top:0">Log / Live Data</h3>
       <div class="log" id="log"></div>
-      <div style="margin-top:12px"><small>Note: This demo uses a simple gaze/head-movement heuristic. For robust production use, refine detection & thresholds.</small></div>
+      <div style="margin-top:12px"><small>Note: This demo uses a simple gaze/head-movement heuristic. For robust production use, refine detection, add calibration and privacy disclaimers.</small></div>
     </div>
   </div>
 
@@ -79,6 +87,7 @@
     const logEl = document.getElementById('log');
     const statusEl = document.getElementById('status');
     const predictedEl = document.getElementById('predicted');
+    const cameraErrorEl = document.getElementById('cameraError');
 
     let model = null;
     let streaming = false;
@@ -90,36 +99,56 @@
     const BASELINE_MS = 2000; // initial baseline capture time
     const SHOW_PER_NUMBER_MS = 1500; // how long each number shows
     const GAP_MS = 400; // gap between numbers
-    const MOVEMENT_THRESHOLD = 0.015; // heuristic threshold
 
+    function log(msg){
+      const t = new Date().toLocaleTimeString();
+      logEl.innerHTML = `[${t}] ${msg}<br>` + logEl.innerHTML;
+    }
+    function status(txt){ statusEl.textContent = 'Status: ' + txt; }
+
+    // --- Camera setup (separated from model load) ---
     async function startCamera(){
+      cameraErrorEl.style.display = 'none';
       try{
         const stream = await navigator.mediaDevices.getUserMedia({video:{width:640,height:480}, audio:false});
         video.srcObject = stream;
         await video.play();
+        streaming = true;
+        // sync overlay size
         overlay.width = video.videoWidth || 640;
         overlay.height = video.videoHeight || 480;
-        streaming = true;
+        status('Camera running');
         log('Camera started');
-        status('Camera running — loading model...');
-
-        // load model
-        if(!model){
-          model = await faceLandmarksDetection.load(faceLandmarksDetection.SupportedPackages.mediapipeFacemesh, {runtime:'tfjs'});
-          log('Face-landmarks model loaded');
-        }
-
-        status('Ready. Generate numbers.');
+        // attempt to load model (non-blocking)
+        loadModel().catch(err=>{
+          cameraErrorEl.style.display = 'block';
+          cameraErrorEl.textContent = 'Model load failed: ' + (err.message||err);
+          log('Model load failed: '+(err.message||err));
+          status('Camera ready — model failed to load');
+        });
+        // start overlay loop even if model not ready
+        requestAnimationFrame(drawLoop);
       }catch(err){
-        log('Error starting camera: '+err.message);
+        cameraErrorEl.style.display = 'block';
+        cameraErrorEl.textContent = 'Camera access failed: ' + (err.message||err);
+        log('Error starting camera: '+(err.message||err));
         status('Camera error');
+        streaming = false;
       }
+    }
+
+    async function loadModel(){
+      status('Loading face model...');
+      model = await faceLandmarksDetection.load(faceLandmarksDetection.SupportedPackages.mediapipeFacemesh, {runtime:'tfjs'});
+      log('Face-landmarks model loaded');
+      status('Model loaded — Ready. Generate numbers.');
     }
 
     startCamBtn.addEventListener('click', startCamera);
 
+    // --- Numbers UI ---
     generateBtn.addEventListener('click', ()=>{
-      numbers = generateUniqueNumbers(10, 1, 99); // show 10 numbers between 1..99
+      numbers = generateUniqueNumbers(10, 1, 99);
       renderNumbers();
       beginBtn.disabled = false;
       predictedEl.textContent = '—';
@@ -129,7 +158,8 @@
     });
 
     beginBtn.addEventListener('click', async ()=>{
-      if(!streaming || !model){ alert('Start camera and load model first'); return; }
+      if(!streaming){ alert('Start camera first'); return; }
+      if(!model){ alert('Model not loaded yet — wait or try Start Camera again'); return; }
       await beginReadSequence();
     });
 
@@ -150,51 +180,54 @@
       });
     }
 
-    function log(msg){
-      const t = new Date().toLocaleTimeString();
-      logEl.innerHTML = `[${t}] ${msg}<br>` + logEl.innerHTML;
-    }
-
-    function status(txt){ statusEl.textContent = 'Status: ' + txt; }
-
-    // Helper: draw keypoints
+    // --- Face drawing & metrics ---
     function drawResults(predictions){
       ctx.clearRect(0,0,overlay.width, overlay.height);
       if(!predictions || predictions.length===0) return;
       predictions.forEach(pred=>{
-        const keypoints = pred.scaledMesh;
+        const keypoints = pred.scaledMesh || [];
         ctx.fillStyle = 'aqua';
-        for(let i=0;i<keypoints.length;i+=2){
-          const x = keypoints[i][0];
-          const y = keypoints[i][1];
+        for(let i=0;i<keypoints.length;i++){
+          const kp = keypoints[i];
+          if(!kp) continue;
+          const x = kp[0];
+          const y = kp[1];
           ctx.fillRect(x-1,y-1,2,2);
         }
       });
     }
 
-    // Compute a simple gaze vector / head-movement metric using landmarks
     function computeMovementMetric(landmarks){
-      // landmarks: array of [x,y,z] points (468 points for mediapipe)
-      // We'll use a few stable reference points: nose tip (1), left eye center (~33), right eye center (~263)
-      // Approach: compute normalized vector between eyes and nose to approximate head direction.
       try{
         const nose = landmarks[1];
         const leftEye = landmarks[33];
         const rightEye = landmarks[263];
         const eyeMid = [(leftEye[0]+rightEye[0])/2, (leftEye[1]+rightEye[1])/2];
-        // vector from eyeMid to nose
         const vx = nose[0]-eyeMid[0];
         const vy = nose[1]-eyeMid[1];
-        // normalize by image size
         const nx = vx / overlay.width;
         const ny = vy / overlay.height;
-        // magnitude
         const mag = Math.sqrt(nx*nx + ny*ny);
         return {nx, ny, mag};
       }catch(e){ return {nx:0,ny:0,mag:0}; }
     }
 
-    // Capture baseline for user's neutral face
+    // draw loop that runs regardless of model state; draws model predictions if available
+    async function drawLoop(){
+      if(!streaming) return;
+      try{
+        if(model){
+          const preds = await model.estimateFaces({input:video, returnTensors:false, flipHorizontal:false});
+          drawResults(preds);
+        }else{
+          // if no model yet, clear overlay to avoid stale points
+          ctx.clearRect(0,0,overlay.width, overlay.height);
+        }
+      }catch(err){ /* ignore drawing errors */ }
+      requestAnimationFrame(drawLoop);
+    }
+
+    // baseline capture
     async function captureBaseline(durationMs=BASELINE_MS){
       status('Capturing baseline — keep face neutral...');
       log('Capturing baseline for '+(durationMs/1000)+'s');
@@ -222,16 +255,12 @@
       readings = {};
       numbers.forEach(n=>readings[n]=0);
 
-      // shuffle order
       order = numbers.slice().sort(()=>Math.random()-0.5);
-
-      // baseline
       const baseline = await captureBaseline();
 
       status('Starting sequence — watch the numbers');
       log('Sequence order: ' + order.join(', '));
 
-      // run loop: show each number for SHOW_PER_NUMBER_MS with small gap
       for(let i=0;i<order.length;i++){
         const num = order[i];
         highlightNumber(num);
@@ -242,10 +271,9 @@
         await new Promise(r=>setTimeout(r, GAP_MS));
       }
 
-      // choose predicted highest
       const entries = Object.entries(readings);
       entries.sort((a,b)=>b[1]-a[1]);
-      const [pred, val] = entries[0];
+      const [pred, val] = entries[0]||['—',0];
       predictedEl.textContent = pred + ' (score '+val.toFixed(4)+')';
       status('Done — prediction shown');
       log('Prediction: '+pred+' (scores: '+JSON.stringify(readings)+')');
@@ -265,49 +293,34 @@
     }
 
     async function measureResponseForNumber(num, baseline, durationMs){
-      // Show number visually (already highlighted). While showing, sample metric and compute deviation from baseline.
       const samples = [];
       const t0 = performance.now();
       while(performance.now()-t0 < durationMs){
         const preds = await model.estimateFaces({input:video, returnTensors:false, flipHorizontal:false});
-        drawResults(preds);
         if(preds && preds.length>0){
           const m = computeMovementMetric(preds[0].scaledMesh);
           samples.push(m.mag);
         }
         await new Promise(r=>setTimeout(r,70));
       }
-      // compute average deviation
       const avg = samples.length? (samples.reduce((a,b)=>a+b,0)/samples.length) : 0;
       const deviation = Math.max(0, avg - baseline);
-      // small smoothing / normalization
-      const score = deviation; // directly use deviation as score
-      return score;
+      return deviation;
     }
 
-    // continuous drawing to overlay when camera running
-    async function continuousLoop(){
-      if(!streaming || !model) return;
-      try{
-        const preds = await model.estimateFaces({input:video, returnTensors:false, flipHorizontal:false});
-        drawResults(preds);
-      }catch(e){ /* ignore */ }
-      requestAnimationFrame(continuousLoop);
-    }
-
-    // start continuous loop when model ready & video plays
-    video.addEventListener('playing', ()=>{
-      if(model) continuousLoop();
-    });
-
-    // Accessibility: keyboard shortcuts
+    // keyboard shortcuts
     document.addEventListener('keydown', (e)=>{
       if(e.key==='g') generateBtn.click();
       if(e.key==='s') startCamBtn.click();
       if(e.key==='b') beginBtn.click();
     });
 
-    // End of script
+    // make overlay responsive to video size changes
+    const resizeObserver = new ResizeObserver(()=>{
+      overlay.width = video.videoWidth || overlay.width;
+      overlay.height = video.videoHeight || overlay.height;
+    });
+    resizeObserver.observe(video);
   </script>
 </body>
 </html>
