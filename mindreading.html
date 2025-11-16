@@ -1,253 +1,313 @@
-<!--
-Eye Number Predictor
-Single-file HTML + JS project.
-Instructions: Think of a number from 1 to 10. Calibrate the gaze tracker by clicking the calibration dots. Then press START PREDICTION and look at the number you thought of. After prediction finishes, click the number you actually thought of to check accuracy.
-Uses WebGazer.js (open-source gaze tracker).
--->
-
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Eye Number Predictor (1-10)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mind-Reader Demo — Webcam + Face Tracking (JS + HTML)</title>
   <style>
-    :root{--bg:#0f1724;--card:#0b1220;--accent:#06b6d4;--muted:#9ca3af;--glass: rgba(255,255,255,0.03)}
-    html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Arial;background:linear-gradient(180deg,#071024 0%, #0b1220 100%);color:#e6eef8}
-    .container{max-width:980px;margin:36px auto;padding:24px}
-    .card{background:var(--card);border-radius:12px;padding:18px;box-shadow:0 6px 30px rgba(2,6,23,0.6)}
-    h1{margin:0 0 8px;font-size:20px}
-    p.lead{margin:6px 0 14px;color:var(--muted)}
-    .grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin:18px 0}
-    .cell{background:var(--glass);border-radius:10px;padding:18px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;cursor:pointer;user-select:none;transition:transform .12s,box-shadow .12s}
-    .cell:hover{transform:translateY(-4px);box-shadow:0 12px 30px rgba(2,6,23,0.6)}
-    .cell.predicted{outline:3px solid rgba(6,182,212,0.18)}
-    .cell.actual{outline:3px solid rgba(34,197,94,0.18)}
-    .controls{display:flex;gap:10px;flex-wrap:wrap}
-    button{background:linear-gradient(90deg,var(--accent),#7dd3fc);border:none;color:#032027;padding:10px 14px;border-radius:8px;font-weight:700;cursor:pointer}
-    button.secondary{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted)}
-    .info{margin-top:12px;color:var(--muted);font-size:14px}
-    .status{margin-top:12px;padding:10px;border-radius:8px;background:rgba(255,255,255,0.02);font-weight:600}
-    .footer{margin-top:18px;color:var(--muted);font-size:13px}
-    #overlay{position:fixed;inset:0;background:rgba(2,6,23,0.7);display:flex;align-items:center;justify-content:center;z-index:60}
-    .calib{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:420px}
-    .dot{width:60px;height:60px;border-radius:50%;background:linear-gradient(180deg,#06b6d4,#0ea5a2);display:flex;align-items:center;justify-content:center;color:#021;cursor:pointer;font-weight:800}
-    #videoPreview{display:none;border-radius:8px;overflow:hidden;margin-top:12px}
-    .small{font-size:13px;color:var(--muted)}
+    :root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,'Noto Sans',sans-serif}
+    body{margin:12px;background:#0f172a;color:#e6eef8}
+    h1{font-size:20px;margin:0 0 8px}
+    .wrap{display:grid;grid-template-columns:380px 1fr 260px;gap:12px}
+    .card{background:#0b1220;padding:12px;border-radius:12px;box-shadow:0 6px 18px rgba(2,6,23,.6)}
+    video{width:100%;height:auto;border-radius:8px;background:#000}
+    canvas{position:absolute;left:0;top:0}
+    .controls{display:flex;gap:8px;margin-top:8px}
+    button{background:#0ea5a9;border:none;padding:8px 12px;border-radius:8px;color:#042027;cursor:pointer}
+    .numbers{display:flex;flex-wrap:wrap;gap:8px}
+    .num{width:60px;height:60px;border-radius:8px;background:#071627;display:flex;align-items:center;justify-content:center;font-size:20px}
+    .num.chosen{background:#065f46}
+    .log{font-family:monospace;font-size:13px;line-height:1.4;max-height:560px;overflow:auto}
+    .status{margin-top:8px}
   </style>
 </head>
 <body>
-  <div class="container">
+  <h1>Mind-Reader Demo — Live Video + Face Tracking (JS + HTML)</h1>
+  <div class="wrap">
     <div class="card">
-      <h1>Eye Number Predictor — Think a number 1 to 10</h1>
-      <p class="lead">Socho ek number 1 se 10 ke beech. <strong>Don't click a number yet.</strong> Pehle calibration karo, phir prediction start karo. Prediction ke baad aap woh number click karke check kar sakte ho.</p>
-
+      <div style="position:relative">
+        <video id="video" autoplay muted playsinline></video>
+        <canvas id="overlay" width="640" height="480" style="position:absolute;right:0;top:0;pointer-events:none"></canvas>
+      </div>
       <div class="controls">
-        <button id="calibrateBtn">Start Calibration</button>
-        <button id="startBtn" class="secondary" disabled>Start Prediction</button>
-        <button id="shuffleBtn" class="secondary">Shuffle Numbers</button>
-        <button id="resetBtn" class="secondary">Reset</button>
+        <button id="startCam">Start Camera</button>
+        <button id="generate">Generate Numbers</button>
+        <button id="begin" disabled>Begin Read</button>
+      </div>
+      <div class="status" id="status">Status: Idle</div>
+    </div>
+
+    <div class="card" style="padding:18px;">
+      <h2 style="font-size:16px;margin-bottom:8px">Instructions (Hinglish, Devanagari)</h2>
+      <p>1) <strong>Start Camera</strong> pe click karo aur apni face ko camera ke samne rakho.<br>
+      2) <strong>Generate Numbers</strong> — screen pe 10 random numbers aayenge. Ek number socho (man se, bolna nahi).<br>
+      3) <strong>Begin Read</strong> dabao — app numbers ko randomly ek-ek karke dikhayega aur face-movement track karega.<br>
+      4) App heuristic use karke jiska face response maximum hua, woh number suggest karega. <em>(Note: ये 100% mind-reading नहीं — सिर्फ face-movement heuristic है)</em></p>
+
+      <div style="margin-top:12px">
+        <div id="numbersArea" class="numbers"></div>
       </div>
 
-      <div class="info">Tip: Sit straight and keep your face visible to the webcam. Calibration helps accuracy.</div>
-
-      <div class="grid" id="grid"></div>
-
-      <div class="status" id="status">Status: Not calibrated</div>
-
-      <div class="footer">
-        <div class="small">Library: WebGazer.js (client-side gaze prediction). No data leaves your browser.</div>
+      <div style="margin-top:12px">
+        <strong>Predicted:</strong> <span id="predicted">—</span>
       </div>
+    </div>
 
-      <div id="videoPreview"></div>
+    <div class="card">
+      <h3 style="margin-top:0">Log / Live Data</h3>
+      <div class="log" id="log"></div>
+      <div style="margin-top:12px"><small>Note: This demo uses a simple gaze/head-movement heuristic. For robust production use, refine detection & thresholds.</small></div>
     </div>
   </div>
 
-  <!-- Calibration overlay -->
-  <div id="overlay" style="display:none">
-    <div class="card" style="padding:22px;border-radius:12px;max-width:520px">
-      <h2 style="margin-top:0">Calibration</h2>
-      <p class="small">Click each dot a few times to help the gaze model learn where you're looking. Jab complete ho jaye, close karo.</p>
-      <div class="calib" id="calibDots"></div>
-      <div style="margin-top:12px;text-align:right"><button id="closeCalib">Done</button></div>
-    </div>
-  </div>
-
-  <!-- WebGazer lib -->
-  <script src="https://webgazer.cs.brown.edu/webgazer.js"></script>
+  <!-- libraries: TensorFlow.js + face-landmarks-detection -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core@4.8.0/dist/tf-core.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter@4.8.0/dist/tf-converter.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl@4.8.0/dist/tf-backend-webgl.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection@1.0.1/dist/face-landmarks-detection.min.js"></script>
 
   <script>
-    // Build 1-10 grid
-    const grid = document.getElementById('grid');
-    let numbers = Array.from({length:10},(_,i)=>i+1);
-    let predictedNumber = null;
-    let actualNumber = null;
-
-    function renderGrid(){
-      grid.innerHTML='';
-      numbers.forEach(n=>{
-        const el = document.createElement('div');
-        el.className='cell';
-        el.textContent = n;
-        el.dataset.num = n;
-        el.addEventListener('click', ()=>{
-          // User can click to confirm actual number
-          document.querySelectorAll('.cell').forEach(c=>c.classList.remove('actual'));
-          el.classList.add('actual');
-          actualNumber = Number(el.dataset.num);
-          showResult();
-        });
-        grid.appendChild(el);
-      });
-    }
-
-    function shuffle(){
-      for(let i=numbers.length-1;i>0;i--){
-        const j=Math.floor(Math.random()*(i+1));[numbers[i],numbers[j]]=[numbers[j],numbers[i]];
-      }
-      renderGrid();
-    }
-
-    shuffle();
-
-    // Buttons
-    const calibrateBtn = document.getElementById('calibrateBtn');
-    const startBtn = document.getElementById('startBtn');
-    const shuffleBtn = document.getElementById('shuffleBtn');
-    const resetBtn = document.getElementById('resetBtn');
-    const status = document.getElementById('status');
-
-    // Overlay calibration dots
+    // == Elements ==
+    const video = document.getElementById('video');
     const overlay = document.getElementById('overlay');
-    const calibDots = document.getElementById('calibDots');
+    const ctx = overlay.getContext('2d');
+    const startCamBtn = document.getElementById('startCam');
+    const generateBtn = document.getElementById('generate');
+    const beginBtn = document.getElementById('begin');
 
-    // create 9 calibration dots
-    const positions = [
-      {x:0.1,y:0.1},{x:0.5,y:0.1},{x:0.9,y:0.1},
-      {x:0.1,y:0.5},{x:0.5,y:0.5},{x:0.9,y:0.5},
-      {x:0.1,y:0.9},{x:0.5,y:0.9},{x:0.9,y:0.9}
-    ];
+    const numbersArea = document.getElementById('numbersArea');
+    const logEl = document.getElementById('log');
+    const statusEl = document.getElementById('status');
+    const predictedEl = document.getElementById('predicted');
 
-    positions.forEach((p,i)=>{
-      const d = document.createElement('div');
-      d.className='dot';
-      d.textContent = i+1;
-      d.addEventListener('click', ()=>{
-        // when user clicks, feed webgazer with this point repeatedly to improve calibration
-        const rect = d.getBoundingClientRect();
-        const cx = rect.left + rect.width/2;
-        const cy = rect.top + rect.height/2;
-        // simulate multiple samples
-        for(let k=0;k<30;k++){
-          if(window.webgazer) webgazer.recordScreenPosition(cx,cy,'click');
-        }
-        d.style.transform='scale(0.9)';
-        setTimeout(()=>d.style.transform='scale(1)',120);
-      });
-      calibDots.appendChild(d);
-    });
+    let model = null;
+    let streaming = false;
+    let numbers = [];
+    let order = [];
+    let readings = {}; // store score per number
 
-    document.getElementById('closeCalib').addEventListener('click', ()=>{
-      overlay.style.display='none';
-      status.textContent='Status: Calibrated — Ready to predict';
-      startBtn.disabled=false;
-      // show camera feed small
-      const vp = document.getElementById('videoPreview');
-      if(window.webgazer && webgazer.getVideoElement()){
-        vp.innerHTML='';
-        const v = webgazer.getVideoElement();
-        v.style.width='200px'; v.style.height='150px'; v.style.objectFit='cover'; v.style.display='block';
-        vp.appendChild(v);
-      }
-    });
+    // Heuristic params
+    const BASELINE_MS = 2000; // initial baseline capture time
+    const SHOW_PER_NUMBER_MS = 1500; // how long each number shows
+    const GAP_MS = 400; // gap between numbers
+    const MOVEMENT_THRESHOLD = 0.015; // heuristic threshold
 
-    calibrateBtn.addEventListener('click', async ()=>{
-      overlay.style.display='flex';
-      status.textContent='Status: Starting webcam and webgazer...';
+    async function startCamera(){
       try{
-        await initWebGazer();
-        status.textContent='Status: WebGazer running — click calibration dots';
-      }catch(err){
-        status.textContent='Status: Could not start webcam. Allow camera and try again.';
-        console.error(err);
-      }
-    });
+        const stream = await navigator.mediaDevices.getUserMedia({video:{width:640,height:480}, audio:false});
+        video.srcObject = stream;
+        await video.play();
+        overlay.width = video.videoWidth || 640;
+        overlay.height = video.videoHeight || 480;
+        streaming = true;
+        log('Camera started');
+        status('Camera running — loading model...');
 
-    shuffleBtn.addEventListener('click', ()=>{shuffle(); status.textContent='Status: Shuffled';});
-    resetBtn.addEventListener('click', ()=>{numbers=Array.from({length:10},(_,i)=>i+1);shuffle(); predictedNumber=null; actualNumber=null;document.querySelectorAll('.cell').forEach(c=>c.classList.remove('predicted','actual'));status.textContent='Status: Reset'; startBtn.disabled=true;});
-
-    startBtn.addEventListener('click', async ()=>{
-      // Predict for a short time
-      if(!window.webgazer){status.textContent='WebGazer not loaded';return}
-      status.textContent='Status: Predicting... Look at your number';
-      document.querySelectorAll('.cell').forEach(c=>c.classList.remove('predicted','actual'));
-      predictedNumber = null; actualNumber = null;
-
-      const hits = {}; // count hits per number
-      const duration = 5000; // ms
-      const endTime = Date.now()+duration;
-
-      // sampling loop
-      while(Date.now() < endTime){
-        const p = webgazer.getCurrentPrediction();
-        if(p){
-          const x = p.x; const y = p.y;
-          // find element at this point
-          const el = document.elementFromPoint(x,y);
-          if(el && el.classList && el.classList.contains('cell')){
-            const num = el.dataset.num;
-            hits[num] = (hits[num]||0)+1;
-          }
+        // load model
+        if(!model){
+          model = await faceLandmarksDetection.load(faceLandmarksDetection.SupportedPackages.mediapipeFacemesh, {runtime:'tfjs'});
+          log('Face-landmarks model loaded');
         }
-        await new Promise(r=>setTimeout(r,60));
+
+        status('Ready. Generate numbers.');
+      }catch(err){
+        log('Error starting camera: '+err.message);
+        status('Camera error');
       }
-
-      // choose max hit
-      let maxNum=null,maxCount=0;
-      for(const k in hits){
-        if(hits[k] > maxCount){maxCount=hits[k]; maxNum=k}
-      }
-
-      if(maxNum){
-        predictedNumber = Number(maxNum);
-        const found = Array.from(document.querySelectorAll('.cell')).find(c=>Number(c.dataset.num)===predictedNumber);
-        if(found) found.classList.add('predicted');
-        status.textContent = `Status: Predicted — ${predictedNumber}. Click the number you actually thought of to check.`;
-      } else {
-        status.textContent = 'Status: Could not predict. Try better calibration and brighter lighting.';
-      }
-
-    });
-
-    function showResult(){
-      if(predictedNumber==null || actualNumber==null) return;
-      const text = predictedNumber===actualNumber ? `Correct! Predicted ${predictedNumber}.` : `Wrong. Predicted ${predictedNumber}, actual ${actualNumber}.`;
-      status.textContent = 'Result: '+text;
     }
 
-    // initialize webgazer
-    async function initWebGazer(){
-      return new Promise((resolve,reject)=>{
-        try{
-          // start webgazer
-          webgazer.setRegression('ridge')
-            .setGazeListener(function(data,elapsed){
-              // listener runs frequently; we don't use it directly here
-            }).begin()
-            .then(()=>{
-              // hide default prediction points
-              webgazer.showVideo(true).showFaceOverlay(false).showFaceFeedbackBox(false).showPredictionPoints(false);
-              resolve();
-            }).catch(e=>{
-              reject(e);
-            });
-        }catch(e){reject(e)}
+    startCamBtn.addEventListener('click', startCamera);
+
+    generateBtn.addEventListener('click', ()=>{
+      numbers = generateUniqueNumbers(10, 1, 99); // show 10 numbers between 1..99
+      renderNumbers();
+      beginBtn.disabled = false;
+      predictedEl.textContent = '—';
+      readings = {};
+      log('Numbers generated: ' + numbers.join(', '));
+      status('Numbers generated — think of one number silently.');
+    });
+
+    beginBtn.addEventListener('click', async ()=>{
+      if(!streaming || !model){ alert('Start camera and load model first'); return; }
+      await beginReadSequence();
+    });
+
+    function generateUniqueNumbers(count, min, max){
+      const set = new Set();
+      while(set.size < count){ set.add(Math.floor(Math.random()*(max-min+1))+min); }
+      return Array.from(set);
+    }
+
+    function renderNumbers(){
+      numbersArea.innerHTML = '';
+      numbers.forEach(n=>{
+        const d = document.createElement('div');
+        d.className = 'num';
+        d.textContent = n;
+        d.dataset.value = n;
+        numbersArea.appendChild(d);
       });
     }
 
-    // Safety: stop webgazer when leaving
-    window.addEventListener('beforeunload', ()=>{try{webgazer && webgazer.end();}catch(e){}});
+    function log(msg){
+      const t = new Date().toLocaleTimeString();
+      logEl.innerHTML = `[${t}] ${msg}<br>` + logEl.innerHTML;
+    }
 
+    function status(txt){ statusEl.textContent = 'Status: ' + txt; }
+
+    // Helper: draw keypoints
+    function drawResults(predictions){
+      ctx.clearRect(0,0,overlay.width, overlay.height);
+      if(!predictions || predictions.length===0) return;
+      predictions.forEach(pred=>{
+        const keypoints = pred.scaledMesh;
+        ctx.fillStyle = 'aqua';
+        for(let i=0;i<keypoints.length;i+=2){
+          const x = keypoints[i][0];
+          const y = keypoints[i][1];
+          ctx.fillRect(x-1,y-1,2,2);
+        }
+      });
+    }
+
+    // Compute a simple gaze vector / head-movement metric using landmarks
+    function computeMovementMetric(landmarks){
+      // landmarks: array of [x,y,z] points (468 points for mediapipe)
+      // We'll use a few stable reference points: nose tip (1), left eye center (~33), right eye center (~263)
+      // Approach: compute normalized vector between eyes and nose to approximate head direction.
+      try{
+        const nose = landmarks[1];
+        const leftEye = landmarks[33];
+        const rightEye = landmarks[263];
+        const eyeMid = [(leftEye[0]+rightEye[0])/2, (leftEye[1]+rightEye[1])/2];
+        // vector from eyeMid to nose
+        const vx = nose[0]-eyeMid[0];
+        const vy = nose[1]-eyeMid[1];
+        // normalize by image size
+        const nx = vx / overlay.width;
+        const ny = vy / overlay.height;
+        // magnitude
+        const mag = Math.sqrt(nx*nx + ny*ny);
+        return {nx, ny, mag};
+      }catch(e){ return {nx:0,ny:0,mag:0}; }
+    }
+
+    // Capture baseline for user's neutral face
+    async function captureBaseline(durationMs=BASELINE_MS){
+      status('Capturing baseline — keep face neutral...');
+      log('Capturing baseline for '+(durationMs/1000)+'s');
+      const samples = [];
+      const t0 = performance.now();
+      while(performance.now()-t0 < durationMs){
+        const preds = await model.estimateFaces({input:video, returnTensors:false, flipHorizontal:false});
+        if(preds && preds.length>0){
+          const m = computeMovementMetric(preds[0].scaledMesh);
+          samples.push(m.mag);
+        }
+        await new Promise(r=>setTimeout(r,80));
+      }
+      const avg = samples.length? (samples.reduce((a,b)=>a+b,0)/samples.length) : 0;
+      log('Baseline average magnitude: '+avg.toFixed(4));
+      status('Baseline captured');
+      return avg;
+    }
+
+    async function beginReadSequence(){
+      beginBtn.disabled = true;
+      generateBtn.disabled = true;
+      startCamBtn.disabled = true;
+      predictedEl.textContent = '—';
+      readings = {};
+      numbers.forEach(n=>readings[n]=0);
+
+      // shuffle order
+      order = numbers.slice().sort(()=>Math.random()-0.5);
+
+      // baseline
+      const baseline = await captureBaseline();
+
+      status('Starting sequence — watch the numbers');
+      log('Sequence order: ' + order.join(', '));
+
+      // run loop: show each number for SHOW_PER_NUMBER_MS with small gap
+      for(let i=0;i<order.length;i++){
+        const num = order[i];
+        highlightNumber(num);
+        const score = await measureResponseForNumber(num, baseline, SHOW_PER_NUMBER_MS);
+        readings[num] += score;
+        log('Number '+num+' scored '+score.toFixed(4));
+        unhighlightNumber(num);
+        await new Promise(r=>setTimeout(r, GAP_MS));
+      }
+
+      // choose predicted highest
+      const entries = Object.entries(readings);
+      entries.sort((a,b)=>b[1]-a[1]);
+      const [pred, val] = entries[0];
+      predictedEl.textContent = pred + ' (score '+val.toFixed(4)+')';
+      status('Done — prediction shown');
+      log('Prediction: '+pred+' (scores: '+JSON.stringify(readings)+')');
+
+      beginBtn.disabled = false;
+      generateBtn.disabled = false;
+      startCamBtn.disabled = false;
+    }
+
+    function highlightNumber(num){
+      const nodes = numbersArea.querySelectorAll('.num');
+      nodes.forEach(n=>{ if(Number(n.dataset.value)===num) n.classList.add('chosen'); });
+    }
+    function unhighlightNumber(num){
+      const nodes = numbersArea.querySelectorAll('.num');
+      nodes.forEach(n=>{ if(Number(n.dataset.value)===num) n.classList.remove('chosen'); });
+    }
+
+    async function measureResponseForNumber(num, baseline, durationMs){
+      // Show number visually (already highlighted). While showing, sample metric and compute deviation from baseline.
+      const samples = [];
+      const t0 = performance.now();
+      while(performance.now()-t0 < durationMs){
+        const preds = await model.estimateFaces({input:video, returnTensors:false, flipHorizontal:false});
+        drawResults(preds);
+        if(preds && preds.length>0){
+          const m = computeMovementMetric(preds[0].scaledMesh);
+          samples.push(m.mag);
+        }
+        await new Promise(r=>setTimeout(r,70));
+      }
+      // compute average deviation
+      const avg = samples.length? (samples.reduce((a,b)=>a+b,0)/samples.length) : 0;
+      const deviation = Math.max(0, avg - baseline);
+      // small smoothing / normalization
+      const score = deviation; // directly use deviation as score
+      return score;
+    }
+
+    // continuous drawing to overlay when camera running
+    async function continuousLoop(){
+      if(!streaming || !model) return;
+      try{
+        const preds = await model.estimateFaces({input:video, returnTensors:false, flipHorizontal:false});
+        drawResults(preds);
+      }catch(e){ /* ignore */ }
+      requestAnimationFrame(continuousLoop);
+    }
+
+    // start continuous loop when model ready & video plays
+    video.addEventListener('playing', ()=>{
+      if(model) continuousLoop();
+    });
+
+    // Accessibility: keyboard shortcuts
+    document.addEventListener('keydown', (e)=>{
+      if(e.key==='g') generateBtn.click();
+      if(e.key==='s') startCamBtn.click();
+      if(e.key==='b') beginBtn.click();
+    });
+
+    // End of script
   </script>
 </body>
 </html>
