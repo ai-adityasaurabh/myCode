@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Text to Video Generator</title>
+
+<style>
+body {
+  margin: 0;
+  font-family: Arial;
+  background: #0f172a;
+  color: white;
+  text-align: center;
+}
+
+.container {
+  margin-top: 40px;
+}
+
+textarea {
+  width: 80%;
+  height: 120px;
+  padding: 10px;
+  font-size: 16px;
+  border-radius: 10px;
+}
+
+button {
+  margin-top: 15px;
+  padding: 12px 25px;
+  font-size: 18px;
+  background: #22c55e;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+video {
+  margin-top: 20px;
+  width: 70%;
+  border-radius: 10px;
+}
+
+a {
+  display: block;
+  margin-top: 10px;
+  color: #38bdf8;
+}
+</style>
+
+</head>
+<body>
+
+<div class="container">
+  <h1>🎬 Text → Video Generator</h1>
+
+  <textarea id="text" placeholder="Enter your script here..."></textarea><br>
+
+  <button onclick="start()">Generate Video</button>
+
+  <br>
+  <video id="video" controls></video>
+  <a id="download" style="display:none;" download="video.webm">⬇ Download Video</a>
+</div>
+
+<script>
+async function start() {
+  const text = document.getElementById("text").value.trim();
+  if (!text) return alert("Enter text first!");
+
+  const canvas = document.createElement("canvas");
+  canvas.width = 720;
+  canvas.height = 400;
+  const ctx = canvas.getContext("2d");
+
+  const stream = canvas.captureStream(30);
+  const recorder = new MediaRecorder(stream);
+
+  let chunks = [];
+  recorder.ondataavailable = e => chunks.push(e.data);
+
+  recorder.onstop = () => {
+    const blob = new Blob(chunks, { type: "video/webm" });
+    const url = URL.createObjectURL(blob);
+
+    document.getElementById("video").src = url;
+
+    const dl = document.getElementById("download");
+    dl.href = url;
+    dl.style.display = "block";
+  };
+
+  recorder.start();
+
+  // 🔊 Voice
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.rate = 1;
+  utter.pitch = 1;
+  speechSynthesis.speak(utter);
+
+  // 📝 Text animation
+  let words = text.split(" ");
+  let i = 0;
+
+  function draw() {
+    // background
+    ctx.fillStyle = "#020617";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // title
+    ctx.fillStyle = "#22c55e";
+    ctx.font = "bold 30px Arial";
+    ctx.fillText("AI Video", 20, 40);
+
+    // text
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "26px Arial";
+
+    let currentText = words.slice(0, i).join(" ");
+    wrapText(ctx, currentText, 40, 150, 640, 35);
+
+    i++;
+
+    if (i <= words.length) {
+      requestAnimationFrame(draw);
+    } else {
+      setTimeout(() => recorder.stop(), 2000);
+    }
+  }
+
+  draw();
+}
+
+// text wrap
+function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+  let words = text.split(" ");
+  let line = "";
+
+  for (let n = 0; n < words.length; n++) {
+    let testLine = line + words[n] + " ";
+    let width = ctx.measureText(testLine).width;
+
+    if (width > maxWidth && n > 0) {
+      ctx.fillText(line, x, y);
+      line = words[n] + " ";
+      y += lineHeight;
+    } else {
+      line = testLine;
+    }
+  }
+  ctx.fillText(line, x, y);
+}
+</script>
+
+</body>
+</html>
