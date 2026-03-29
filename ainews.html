@@ -2,87 +2,158 @@
 <html lang="hi">
 <head>
 <meta charset="UTF-8">
-<title>AI News Human</title>
+<title>AI News Anchor PRO</title>
 
 <style>
 body {
-  text-align:center;
+  margin:0;
   background:#000;
-  color:white;
   font-family:Arial;
+  color:white;
 }
 
-textarea { width:90%; height:100px; }
+/* HEADER */
+.header {
+  background:#c00;
+  padding:10px;
+  display:flex;
+  justify-content:space-between;
+}
 
-.container {
+.logo { font-weight:bold; }
+.live { color:#0f0; }
+
+/* STUDIO */
+.studio {
+  width:380px;
+  margin:20px auto;
   position:relative;
-  width:360px;
-  margin:auto;
-}
-
-#anchor {
-  width:100%;
+  overflow:hidden;
   border-radius:10px;
 }
 
-/* ticker */
+/* ANCHOR */
+#anchor {
+  width:100%;
+}
+
+/* FAKE MOUTH */
+.mouth {
+  position:absolute;
+  width:40px;
+  height:15px;
+  background:black;
+  border-radius:50%;
+  left:50%;
+  top:58%;
+  transform:translateX(-50%);
+}
+
+/* BREAKING */
+.breaking {
+  position:absolute;
+  top:0;
+  width:100%;
+  background:red;
+  text-align:center;
+}
+
+/* TICKER */
 .ticker {
   position:absolute;
   bottom:0;
   width:100%;
-  background:red;
-  white-space:nowrap;
+  background:#c00;
   overflow:hidden;
+  white-space:nowrap;
 }
 .ticker span {
   display:inline-block;
   padding-left:100%;
-  animation:scroll 10s linear infinite;
+  animation:scroll 12s linear infinite;
 }
 
 @keyframes scroll {
-  0% { transform:translateX(0); }
-  100% { transform:translateX(-100%); }
+  0%{transform:translateX(0);}
+  100%{transform:translateX(-100%);}
 }
+
+.controls { text-align:center; }
+textarea { width:90%; height:90px; }
+button, select { padding:10px; margin:5px; }
+
 </style>
 </head>
 
 <body>
 
-<h2>📰 AI News Human</h2>
+<div class="header">
+  <div class="logo">📰 NEWS LIVE</div>
+  <div class="live">LIVE ●</div>
+</div>
 
+<div class="controls">
 <textarea id="news">नमस्कार, आज की ताज़ा खबरें...</textarea><br>
 
+<select id="gender">
+<option value="male">Male Anchor</option>
+<option value="female">Female Anchor</option>
+</select>
+
 <button onclick="start()">▶ Start</button>
-<button onclick="download()">⬇ Download MP4</button>
+<button onclick="download()">⬇ Download</button>
+</div>
 
-<br><br>
+<div class="studio" id="area">
 
-<div class="container" id="area">
-  <!-- REAL HUMAN IMAGE -->
-  <img id="anchor"
-   src="https://images.unsplash.com/photo-1527980965255-d3b416303d12?w=400">
+<div class="breaking">BREAKING NEWS</div>
 
-  <div class="ticker">
-    <span id="tickerText"></span>
-  </div>
+<!-- REAL HUMAN IMAGES -->
+<img id="anchor" src="https://picsum.photos/400/500">
+
+<div class="mouth" id="mouth"></div>
+
+<div class="ticker">
+<span id="tickerText"></span>
+</div>
+
 </div>
 
 <script>
 
 let recorder, chunks=[];
+let anim;
 
 function start(){
 
 let text=document.getElementById("news").value;
+let gender=document.getElementById("gender").value;
+let anchor=document.getElementById("anchor");
+
+// different real images
+if(gender==="male"){
+anchor.src="https://picsum.photos/400/500?random=1";
+}else{
+anchor.src="https://picsum.photos/400/500?random=2";
+}
+
+// ticker
 document.getElementById("tickerText").innerText=text;
 
-// voice
+// speech
 let speech=new SpeechSynthesisUtterance(text);
 speech.lang="hi-IN";
 speechSynthesis.speak(speech);
 
-// record
+// FAKE LIP SYNC
+let mouth=document.getElementById("mouth");
+
+anim=setInterval(()=>{
+  let h=Math.random()*20+5;
+  mouth.style.height=h+"px";
+},150);
+
+// RECORD
 let stream=document.getElementById("area").captureStream(30);
 recorder=new MediaRecorder(stream);
 chunks=[];
@@ -90,18 +161,21 @@ chunks=[];
 recorder.ondataavailable=e=>chunks.push(e.data);
 
 recorder.onstop=()=>{
-  let blob=new Blob(chunks,{type:"video/mp4"});
+  let blob=new Blob(chunks,{type:"video/webm"});
   let url=URL.createObjectURL(blob);
 
   let a=document.createElement("a");
   a.href=url;
-  a.download="news.mp4";
+  a.download="news.webm";
   a.click();
 };
 
 recorder.start();
 
-speech.onend=()=>recorder.stop();
+speech.onend=()=>{
+  clearInterval(anim);
+  recorder.stop();
+};
 
 }
 
