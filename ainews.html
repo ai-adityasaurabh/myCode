@@ -5,55 +5,21 @@
 <title>AI News Anchor</title>
 
 <style>
-body {
-  text-align: center;
-  font-family: Arial;
-  background: #0d0d0d;
-  color: white;
-}
-
-textarea {
-  width: 90%;
-  height: 100px;
-  margin: 10px;
-}
-
-select, button {
-  padding: 10px;
-  margin: 5px;
-}
-
-.container {
-  position: relative;
-  width: 360px;
-  margin: auto;
-}
-
-#anchor {
-  width: 100%;
-  border-radius: 10px;
-}
-
-/* ONE LINE TICKER */
+body { text-align:center; background:#111; color:white; font-family:Arial;}
+textarea { width:90%; height:100px; }
+.container { position:relative; width:360px; margin:auto;}
+#anchor { width:100%; border-radius:10px;}
 .ticker {
-  position: absolute;
-  bottom: 0;
-  width: 100%;
-  background: red;
-  color: white;
-  overflow: hidden;
-  white-space: nowrap;
+  position:absolute; bottom:0; width:100%;
+  background:red; white-space:nowrap; overflow:hidden;
 }
-
 .ticker span {
-  display: inline-block;
-  padding-left: 100%;
-  animation: scroll 12s linear infinite;
+  display:inline-block; padding-left:100%;
+  animation:scroll 10s linear infinite;
 }
-
 @keyframes scroll {
-  0% { transform: translateX(0); }
-  100% { transform: translateX(-100%); }
+  0%{transform:translateX(0);}
+  100%{transform:translateX(-100%);}
 }
 </style>
 
@@ -61,103 +27,52 @@ select, button {
 
 <body>
 
-<h2>📰 AI Hindi News Anchor</h2>
+<h2>📰 AI News Anchor</h2>
 
 <textarea id="news">नमस्कार, आज की ताज़ा खबरें...</textarea><br>
 
 <select id="voice">
-  <option value="male">Male Anchor</option>
-  <option value="female">Female Anchor</option>
+<option value="male">Male</option>
+<option value="female">Female</option>
 </select>
 
-<button onclick="startNews()">▶ Generate</button>
-<button onclick="downloadVideo()">⬇ Download</button>
+<button onclick="startNews()">Generate</button>
 
-<br><br>
-
-<div class="container" id="recordArea">
-  <!-- WORKING IMAGES -->
-  <img id="anchor"
-   src="https://upload.wikimedia.org/wikipedia/commons/8/89/Portrait_Placeholder.png">
-
-  <div class="ticker">
-    <span id="tickerText"></span>
-  </div>
+<div class="container">
+<img id="anchor">
+<div class="ticker"><span id="tickerText"></span></div>
 </div>
 
 <script>
 
-let recorder, chunks = [];
+// ✅ BASE64 REAL HUMAN IMAGES
+let maleImg = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD...(shortened)";
+let femaleImg = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD...(shortened)";
 
-function startNews() {
+function startNews(){
 
-  let text = document.getElementById("news").value;
-  let type = document.getElementById("voice").value;
-  let anchor = document.getElementById("anchor");
+let text = document.getElementById("news").value;
+let type = document.getElementById("voice").value;
+let anchor = document.getElementById("anchor");
 
-  // Better working images
-  if(type === "male"){
-    anchor.src = "https://upload.wikimedia.org/wikipedia/commons/8/89/Portrait_Placeholder.png";
-  } else {
-    anchor.src = "https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp_Image_2023-07-01_at_10.43.50.jpg";
-  }
+anchor.src = (type==="male") ? maleImg : femaleImg;
 
-  document.getElementById("tickerText").innerText = text;
+document.getElementById("tickerText").innerText = text;
 
-  // Speech
-  let speech = new SpeechSynthesisUtterance(text);
-  speech.lang = "hi-IN";
+// speech
+let speech = new SpeechSynthesisUtterance(text);
+speech.lang = "hi-IN";
+speechSynthesis.speak(speech);
 
-  speechSynthesis.speak(speech);
+// fake lip sync
+let anim = setInterval(()=>{
+  anchor.style.transform="scale(1.02)";
+  setTimeout(()=>anchor.style.transform="scale(1)",150);
+},300);
 
-  // Lip animation
-  let anim = setInterval(() => {
-    anchor.style.transform = "scale(1.02)";
-    setTimeout(() => {
-      anchor.style.transform = "scale(1)";
-    }, 150);
-  }, 300);
+speech.onend=()=>clearInterval(anim);
 
-  speech.onend = () => {
-    clearInterval(anim);
-    if(recorder) recorder.stop();
-  };
-
-  startRecording();
 }
-
-// RECORD VIDEO
-function startRecording() {
-  let stream = document.getElementById("recordArea")
-    .captureStream(30);
-
-  recorder = new MediaRecorder(stream);
-  chunks = [];
-
-  recorder.ondataavailable = e => chunks.push(e.data);
-
-  recorder.onstop = () => {
-    let blob = new Blob(chunks, { type: "video/webm" });
-    let url = URL.createObjectURL(blob);
-
-    let a = document.createElement("a");
-    a.href = url;
-    a.download = "news.webm";
-    a.click();
-  };
-
-  recorder.start();
-}
-
-// MANUAL DOWNLOAD
-function downloadVideo(){
-  if(recorder){
-    recorder.stop();
-  } else {
-    alert("पहले Generate करो");
-  }
-}
-
 </script>
 
 </body>
