@@ -1,183 +1,161 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8">
-<title>Lyrics Video Generator</title>
+<title>AI Song (GitHub Only)</title>
 
 <style>
-body {
-  margin: 0;
-  font-family: Arial;
-  background: black;
-  color: white;
-}
-
+body { margin:0; background:black; color:white; font-family:sans-serif; }
 .container {
-  position: fixed;
-  top: 10px;
-  left: 10px;
-  z-index: 10;
-  background: rgba(0,0,0,0.7);
-  padding: 12px;
-  border-radius: 10px;
-  width: 320px;
+  position:fixed; top:10px; left:10px;
+  background:rgba(0,0,0,0.7);
+  padding:10px; border-radius:10px; z-index:10;
 }
-
-textarea {
-  width: 100%;
-  height: 100px;
-}
-
-button {
-  margin-top: 5px;
-  width: 100%;
-  padding: 8px;
-  border: none;
-  background: orange;
-  cursor: pointer;
-  border-radius: 5px;
-}
-
-canvas {
-  display: block;
-}
+textarea { width:300px; height:100px; }
+button { width:100%; margin-top:5px; padding:8px; }
+canvas { display:block; }
 </style>
 </head>
 
 <body>
 
 <div class="container">
-  <h3>🎵 Lyrics → Video</h3>
+  <h3>🎵 GitHub Song Generator</h3>
 
-  <textarea id="lyrics" placeholder="Enter lyrics (line by line)..."></textarea>
+  <textarea id="lyrics" placeholder="Enter lyrics line by line"></textarea>
 
-  <label>Speed:</label>
-  <input type="range" id="speed" min="0.5" max="2" step="0.1" value="1">
+  <input id="meter" placeholder="slow / fast / sad / happy">
 
-  <label>Voice:</label>
   <select id="voice">
     <option value="male">Male</option>
     <option value="female">Female</option>
   </select>
 
-  <button onclick="generate()">Generate</button>
-  <button onclick="downloadVideo()">Download</button>
+  <button onclick="start()">Generate</button>
+  <button onclick="download()">Download</button>
 </div>
 
-<canvas id="canvas"></canvas>
+<canvas id="c"></canvas>
 
 <script>
-const canvas = document.getElementById("canvas");
+const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
-
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+canvas.width = innerWidth;
+canvas.height = innerHeight;
 
 let bubbles = [];
-let recorder, chunks = [];
 let currentText = "";
+let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+let recorder, chunks = [];
 
-// Create bubbles
-for (let i = 0; i < 60; i++) {
-  bubbles.push({
-    x: Math.random() * canvas.width,
-    y: Math.random() * canvas.height,
-    r: Math.random() * 8 + 2,
-    speed: Math.random() * 1 + 0.5
-  });
+// bubbles
+for(let i=0;i<50;i++){
+  bubbles.push({x:Math.random()*canvas.width,
+  y:Math.random()*canvas.height,
+  r:Math.random()*5+2,s:Math.random()*1+0.5});
 }
 
-// Animation loop
-function animate() {
-  ctx.fillStyle = "rgba(0,0,0,0.25)";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+// animation
+function draw(){
+  ctx.fillStyle="rgba(0,0,0,0.2)";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
 
-  // random color background glow
-  ctx.fillStyle = `hsl(${Date.now()/50 % 360}, 50%, 10%)`;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle=`hsl(${Date.now()/50%360},50%,10%)`;
+  ctx.fillRect(0,0,canvas.width,canvas.height);
 
-  // bubbles
-  ctx.fillStyle = "white";
-  bubbles.forEach(b => {
+  ctx.fillStyle="white";
+  bubbles.forEach(b=>{
     ctx.beginPath();
-    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+    ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
     ctx.fill();
-
-    b.y -= b.speed;
-    if (b.y < 0) b.y = canvas.height;
+    b.y-=b.s;
+    if(b.y<0) b.y=canvas.height;
   });
 
-  // lyrics text
-  ctx.font = "40px Arial";
-  ctx.fillStyle = "yellow";
-  ctx.textAlign = "center";
-  ctx.fillText(currentText, canvas.width/2, canvas.height - 80);
+  ctx.fillStyle="yellow";
+  ctx.font="40px Arial";
+  ctx.textAlign="center";
+  ctx.fillText(currentText,canvas.width/2,canvas.height-80);
 
-  requestAnimationFrame(animate);
+  requestAnimationFrame(draw);
 }
-animate();
+draw();
 
-// Text-to-Speech
-function speak(text, rate, gender) {
-  return new Promise(resolve => {
-    let utter = new SpeechSynthesisUtterance(text);
-    utter.rate = rate;
+// simple tone generator (music feel)
+function playTone(freq,duration){
+  let osc = audioCtx.createOscillator();
+  let gain = audioCtx.createGain();
 
-    let voices = speechSynthesis.getVoices();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
 
-    let selected = voices.find(v =>
-      v.lang.includes("en-IN") || v.lang.includes("hi-IN")
-    );
+  osc.frequency.value = freq;
+  osc.start();
 
-    if (gender === "female") {
-      selected = voices.find(v =>
-        (v.name.toLowerCase().includes("female") || v.name.toLowerCase().includes("woman"))
-      ) || selected;
-    }
+  gain.gain.setValueAtTime(0.2,audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+duration);
 
-    utter.voice = selected;
+  osc.stop(audioCtx.currentTime+duration);
+}
 
-    utter.onend = resolve;
-    speechSynthesis.speak(utter);
+// meter → tempo
+function getTempo(m){
+  if(m.includes("fast")) return 0.2;
+  if(m.includes("slow")) return 0.6;
+  return 0.4;
+}
+
+// fake melody
+function playMelody(text, meter){
+  let tempo = getTempo(meter);
+  let notes = [220,246,261,293,329,349];
+
+  let i=0;
+  let interval = setInterval(()=>{
+    playTone(notes[Math.floor(Math.random()*notes.length)], tempo);
+    i++;
+    if(i>text.length) clearInterval(interval);
+  }, tempo*1000);
+}
+
+// TTS
+function speak(text){
+  return new Promise(res=>{
+    let u = new SpeechSynthesisUtterance(text);
+    u.onend = res;
+    speechSynthesis.speak(u);
   });
 }
 
-// Generate video
-async function generate() {
-  chunks = [];
+async function start(){
+  chunks=[];
 
-  let lyrics = document.getElementById("lyrics").value.split("\n");
-  let speed = document.getElementById("speed").value;
-  let gender = document.getElementById("voice").value;
+  let lines = document.getElementById("lyrics").value.split("\n");
+  let meter = document.getElementById("meter").value;
 
   let stream = canvas.captureStream(30);
   recorder = new MediaRecorder(stream);
-
-  recorder.ondataavailable = e => chunks.push(e.data);
+  recorder.ondataavailable=e=>chunks.push(e.data);
   recorder.start();
 
-  for (let line of lyrics) {
-    currentText = line;
-    await speak(line, speed, gender);
+  for(let line of lines){
+    currentText=line;
+    playMelody(line,meter);
+    await speak(line);
   }
 
-  currentText = "Done ✅";
   recorder.stop();
+  currentText="Done ✅";
 }
 
-// Download
-function downloadVideo() {
-  recorder.onstop = () => {
-    let blob = new Blob(chunks, { type: "video/webm" });
-    let url = URL.createObjectURL(blob);
-
-    let a = document.createElement("a");
-    a.href = url;
-    a.download = "lyrics_video.webm";
+function download(){
+  recorder.onstop=()=>{
+    let blob=new Blob(chunks,{type:"video/webm"});
+    let a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download="song_video.webm";
     a.click();
   };
-
-  alert("Video will download after generation completes");
 }
 </script>
 
