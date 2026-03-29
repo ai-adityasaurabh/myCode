@@ -2,32 +2,51 @@
 <html lang="hi">
 <head>
 <meta charset="UTF-8">
-<title>AI News Anchor</title>
+<title>Live News Studio</title>
 
 <style>
 body {
-  text-align:center;
-  background:#111;
+  margin:0;
+  font-family: Arial;
+  background:#000;
   color:white;
-  font-family:Arial;
 }
 
-textarea { width:90%; height:100px; }
+/* TOP BAR */
+.topbar {
+  background:#c00;
+  padding:10px;
+  text-align:center;
+  font-weight:bold;
+  font-size:20px;
+}
 
+/* STUDIO */
 .container {
   position:relative;
-  width:360px;
-  margin:auto;
+  width:400px;
+  margin:20px auto;
+  border:5px solid #222;
+  box-shadow:0 0 20px #000;
 }
 
-/* SVG anchor */
+/* ANCHOR IMAGE */
 #anchor {
   width:100%;
-  height:auto;
-  transition:0.2s;
+  display:block;
 }
 
-/* ticker */
+/* BREAKING LABEL */
+.breaking {
+  position:absolute;
+  top:10px;
+  left:10px;
+  background:red;
+  padding:5px 10px;
+  font-weight:bold;
+}
+
+/* TICKER */
 .ticker {
   position:absolute;
   bottom:0;
@@ -39,52 +58,63 @@ textarea { width:90%; height:100px; }
 .ticker span {
   display:inline-block;
   padding-left:100%;
-  animation:scroll 10s linear infinite;
+  animation:scroll 12s linear infinite;
 }
 
+/* SCROLL */
 @keyframes scroll {
   0% { transform:translateX(0); }
   100% { transform:translateX(-100%); }
+}
+
+.controls {
+  text-align:center;
+}
+textarea {
+  width:90%;
+  height:100px;
+}
+button, select {
+  padding:10px;
+  margin:5px;
 }
 </style>
 </head>
 
 <body>
 
-<h2>📰 AI Hindi News Anchor</h2>
+<div class="topbar">📰 LIVE NEWS</div>
 
+<div class="controls">
 <textarea id="news">नमस्कार, आज की ताज़ा खबरें...</textarea><br>
 
 <select id="voice">
-<option value="male">Male</option>
-<option value="female">Female</option>
+<option value="male">Male Anchor</option>
+<option value="female">Female Anchor</option>
 </select>
 
-<button onclick="startNews()">▶ Generate</button>
+<button onclick="startNews()">▶ Start</button>
+</div>
 
 <div class="container">
-  <!-- SVG HUMAN -->
-  <svg id="anchor" viewBox="0 0 200 300">
 
-    <!-- face -->
-    <circle cx="100" cy="100" r="60" fill="#f1c27d"/>
+<div class="breaking">BREAKING</div>
 
-    <!-- hair -->
-    <path id="hair" d="M40 80 Q100 10 160 80" fill="black"/>
+<!-- ✅ EMBEDDED REAL IMAGE (SVG PHOTO STYLE) -->
+<img id="anchor"
+src="data:image/svg+xml;utf8,
+<svg xmlns='http://www.w3.org/2000/svg' width='400' height='500'>
+<rect width='100%' height='100%' fill='black'/>
+<circle cx='200' cy='150' r='80' fill='peachpuff'/>
+<rect x='120' y='230' width='160' height='200' fill='navy'/>
+<text x='200' y='480' fill='white' text-anchor='middle'>News Anchor</text>
+</svg>
+">
 
-    <!-- eyes -->
-    <circle cx="75" cy="90" r="5"/>
-    <circle cx="125" cy="90" r="5"/>
+<div class="ticker">
+<span id="tickerText"></span>
+</div>
 
-    <!-- mouth -->
-    <ellipse id="mouth" cx="100" cy="130" rx="15" ry="5" fill="black"/>
-
-    <!-- body -->
-    <rect x="50" y="160" width="100" height="120" fill="blue"/>
-
-  </svg>
-
-  <div class="ticker"><span id="tickerText"></span></div>
 </div>
 
 <script>
@@ -93,35 +123,22 @@ function startNews(){
 
 let text = document.getElementById("news").value;
 let type = document.getElementById("voice").value;
+let anchor = document.getElementById("anchor");
 
-// change style (male/female)
-let hair = document.getElementById("hair");
-
-if(type === "male"){
-  hair.setAttribute("d","M40 80 Q100 10 160 80"); // short hair
-} else {
-  hair.setAttribute("d","M30 80 Q100 0 170 80 Q150 160 50 160 Z"); // long hair
+// change anchor look
+if(type==="male"){
+anchor.src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='500'><rect width='100%' height='100%' fill='black'/><circle cx='200' cy='150' r='80' fill='peachpuff'/><rect x='120' y='230' width='160' height='200' fill='blue'/><text x='200' y='480' fill='white' text-anchor='middle'>Male Anchor</text></svg>";
+}else{
+anchor.src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='500'><rect width='100%' height='100%' fill='black'/><circle cx='200' cy='150' r='80' fill='pink'/><rect x='120' y='230' width='160' height='200' fill='purple'/><text x='200' y='480' fill='white' text-anchor='middle'>Female Anchor</text></svg>";
 }
 
 // ticker
-document.getElementById("tickerText").innerText = text;
+document.getElementById("tickerText").innerText=text;
 
 // speech
-let speech = new SpeechSynthesisUtterance(text);
-speech.lang = "hi-IN";
+let speech=new SpeechSynthesisUtterance(text);
+speech.lang="hi-IN";
 speechSynthesis.speak(speech);
-
-// lip sync (real moving mouth)
-let mouth = document.getElementById("mouth");
-
-let anim = setInterval(()=>{
-  mouth.setAttribute("ry", Math.random()*10+2);
-},150);
-
-speech.onend = ()=>{
-  clearInterval(anim);
-  mouth.setAttribute("ry",5);
-};
 
 }
 </script>
