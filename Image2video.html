@@ -1,1 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AI Image + Prompt → Video</title>
+<style>
+body {
+  font-family: Arial;
+  background: #0f172a;
+  color: white;
+  text-align: center;
+}
+.container {
+  max-width: 800px;
+  margin: auto;
+}
+input, textarea, button {
+  width: 90%;
+  margin: 10px;
+  padding: 10px;
+  border-radius: 10px;
+}
+canvas {
+  border-radius: 15px;
+  margin-top: 20px;
+}
+</style>
+</head>
 
+<body>
+<div class="container">
+<h1>🎥 AI Video Generator</h1>
+
+<input type="file" id="imageInput">
+<textarea id="prompt" placeholder="Enter prompt..."></textarea>
+
+<button onclick="generate()">Generate Video</button>
+<button onclick="download()">Download Video</button>
+
+<canvas id="canvas" width="720" height="480"></canvas>
+</div>
+
+<script>
+let canvas = document.getElementById("canvas");
+let ctx = canvas.getContext("2d");
+let img = new Image();
+let mediaRecorder;
+let chunks = [];
+
+document.getElementById("imageInput").onchange = e => {
+  img.src = URL.createObjectURL(e.target.files[0]);
+};
+
+function generate() {
+  let prompt = document.getElementById("prompt").value;
+  let t = 0;
+
+  let stream = canvas.captureStream(30);
+  mediaRecorder = new MediaRecorder(stream);
+
+  chunks = [];
+  mediaRecorder.ondataavailable = e => chunks.push(e.data);
+  mediaRecorder.start();
+
+  let interval = setInterval(() => {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // zoom animation
+    let scale = 1 + t * 0.01;
+    let w = canvas.width * scale;
+    let h = canvas.height * scale;
+
+    ctx.drawImage(img, -((w - canvas.width)/2), -((h - canvas.height)/2), w, h);
+
+    // prompt text
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillRect(0, 350, 720, 100);
+
+    ctx.fillStyle = "white";
+    ctx.font = "24px Arial";
+    ctx.fillText(prompt, 20, 400);
+
+    t++;
+    if (t > 150) {
+      clearInterval(interval);
+      mediaRecorder.stop();
+    }
+  }, 100);
+}
+
+function download() {
+  mediaRecorder.onstop = () => {
+    let blob = new Blob(chunks, { type: "video/webm" });
+    let url = URL.createObjectURL(blob);
+
+    let a = document.createElement("a");
+    a.href = url;
+    a.download = "video.webm";
+    a.click();
+  };
+}
+</script>
+
+</body>
+</html>
