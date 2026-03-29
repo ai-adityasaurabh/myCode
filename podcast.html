@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Podcast Generator</title>
+</head>
+<body>
+
+<h2>🎙️ 2-Person Podcast Generator</h2>
+
+<textarea id="input" rows="10" cols="50">
+A: Namaste dosto!
+B: Hello! Aaj ka topic AI hai.
+A: AI future hai kya?
+B: Bilkul!
+</textarea><br><br>
+
+<button onclick="generate()">▶ Generate & Play</button>
+
+<script>
+function generate() {
+  const text = document.getElementById("input").value;
+  const lines = text.split("\n");
+
+  const voices = speechSynthesis.getVoices();
+
+  let voiceA = voices.find(v => v.name.includes("Male")) || voices[0];
+  let voiceB = voices.find(v => v.name.includes("Female")) || voices[1];
+
+  function speakLine(i) {
+    if (i >= lines.length) return;
+
+    let line = lines[i].trim();
+    if (!line) return speakLine(i+1);
+
+    let parts = line.split(":");
+    if (parts.length < 2) return speakLine(i+1);
+
+    let speaker = parts[0].trim();
+    let content = parts.slice(1).join(":").trim();
+
+    let utter = new SpeechSynthesisUtterance(content);
+
+    if (speaker === "A") utter.voice = voiceA;
+    else utter.voice = voiceB;
+
+    utter.onend = () => speakLine(i+1);
+    speechSynthesis.speak(utter);
+  }
+
+  speakLine(0);
+}
+</script>
+
+</body>
+</html>
