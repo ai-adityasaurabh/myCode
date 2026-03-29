@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<title>AI News Anchor</title>
+
+<style>
+body {
+  text-align: center;
+  font-family: Arial;
+  background: #0d0d0d;
+  color: white;
+}
+
+textarea {
+  width: 90%;
+  height: 100px;
+  margin: 10px;
+}
+
+select, button {
+  padding: 10px;
+  margin: 5px;
+}
+
+.container {
+  position: relative;
+  width: 360px;
+  margin: auto;
+}
+
+#anchor {
+  width: 100%;
+  border-radius: 10px;
+  transition: 0.2s;
+}
+
+.ticker {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  background: red;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.ticker span {
+  display: inline-block;
+  padding-left: 100%;
+  animation: scroll 12s linear infinite;
+}
+
+@keyframes scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
+}
+</style>
+
+</head>
+
+<body>
+
+<h2>📰 AI Hindi News Anchor</h2>
+
+<textarea id="news" placeholder="यहाँ हिंदी न्यूज़ लिखें..."></textarea><br>
+
+<select id="voice">
+  <option value="male">Male Anchor</option>
+  <option value="female">Female Anchor</option>
+</select>
+
+<button onclick="startNews()">▶ Generate</button>
+
+<div class="container">
+  <img id="anchor" src="https://i.imgur.com/6RKZ5qG.png">
+  <div class="ticker"><span id="tickerText"></span></div>
+</div>
+
+<script>
+function startNews() {
+
+  let text = document.getElementById("news").value;
+  let type = document.getElementById("voice").value;
+  let anchor = document.getElementById("anchor");
+
+  // Change anchor image
+  if(type === "male"){
+    anchor.src = "https://i.imgur.com/6RKZ5qG.png";
+  } else {
+    anchor.src = "https://i.imgur.com/9XnKZ7F.png";
+  }
+
+  // Set ticker
+  document.getElementById("tickerText").innerText = text;
+
+  // Speech (Hindi)
+  let speech = new SpeechSynthesisUtterance(text);
+  speech.lang = "hi-IN";
+
+  let voices = speechSynthesis.getVoices();
+  speech.voice = voices.find(v => v.lang.includes("hi")) || voices[0];
+
+  speech.rate = 1;
+  speech.pitch = 1;
+
+  speechSynthesis.speak(speech);
+
+  // Fake lip sync animation
+  let anim = setInterval(() => {
+    anchor.style.transform = "scale(1.02)";
+    setTimeout(() => {
+      anchor.style.transform = "scale(1)";
+    }, 150);
+  }, 300);
+
+  speech.onend = () => clearInterval(anim);
+}
+</script>
+
+</body>
+</html>
