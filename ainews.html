@@ -2,51 +2,30 @@
 <html lang="hi">
 <head>
 <meta charset="UTF-8">
-<title>Live News Studio</title>
+<title>AI News Human</title>
 
 <style>
 body {
-  margin:0;
-  font-family: Arial;
+  text-align:center;
   background:#000;
   color:white;
+  font-family:Arial;
 }
 
-/* TOP BAR */
-.topbar {
-  background:#c00;
-  padding:10px;
-  text-align:center;
-  font-weight:bold;
-  font-size:20px;
-}
+textarea { width:90%; height:100px; }
 
-/* STUDIO */
 .container {
   position:relative;
-  width:400px;
-  margin:20px auto;
-  border:5px solid #222;
-  box-shadow:0 0 20px #000;
+  width:360px;
+  margin:auto;
 }
 
-/* ANCHOR IMAGE */
 #anchor {
   width:100%;
-  display:block;
+  border-radius:10px;
 }
 
-/* BREAKING LABEL */
-.breaking {
-  position:absolute;
-  top:10px;
-  left:10px;
-  background:red;
-  padding:5px 10px;
-  font-weight:bold;
-}
-
-/* TICKER */
+/* ticker */
 .ticker {
   position:absolute;
   bottom:0;
@@ -58,89 +37,78 @@ body {
 .ticker span {
   display:inline-block;
   padding-left:100%;
-  animation:scroll 12s linear infinite;
+  animation:scroll 10s linear infinite;
 }
 
-/* SCROLL */
 @keyframes scroll {
   0% { transform:translateX(0); }
   100% { transform:translateX(-100%); }
-}
-
-.controls {
-  text-align:center;
-}
-textarea {
-  width:90%;
-  height:100px;
-}
-button, select {
-  padding:10px;
-  margin:5px;
 }
 </style>
 </head>
 
 <body>
 
-<div class="topbar">📰 LIVE NEWS</div>
+<h2>📰 AI News Human</h2>
 
-<div class="controls">
 <textarea id="news">नमस्कार, आज की ताज़ा खबरें...</textarea><br>
 
-<select id="voice">
-<option value="male">Male Anchor</option>
-<option value="female">Female Anchor</option>
-</select>
+<button onclick="start()">▶ Start</button>
+<button onclick="download()">⬇ Download MP4</button>
 
-<button onclick="startNews()">▶ Start</button>
-</div>
+<br><br>
 
-<div class="container">
+<div class="container" id="area">
+  <!-- REAL HUMAN IMAGE -->
+  <img id="anchor"
+   src="https://images.unsplash.com/photo-1527980965255-d3b416303d12?w=400">
 
-<div class="breaking">BREAKING</div>
-
-<!-- ✅ EMBEDDED REAL IMAGE (SVG PHOTO STYLE) -->
-<img id="anchor"
-src="data:image/svg+xml;utf8,
-<svg xmlns='http://www.w3.org/2000/svg' width='400' height='500'>
-<rect width='100%' height='100%' fill='black'/>
-<circle cx='200' cy='150' r='80' fill='peachpuff'/>
-<rect x='120' y='230' width='160' height='200' fill='navy'/>
-<text x='200' y='480' fill='white' text-anchor='middle'>News Anchor</text>
-</svg>
-">
-
-<div class="ticker">
-<span id="tickerText"></span>
-</div>
-
+  <div class="ticker">
+    <span id="tickerText"></span>
+  </div>
 </div>
 
 <script>
 
-function startNews(){
+let recorder, chunks=[];
 
-let text = document.getElementById("news").value;
-let type = document.getElementById("voice").value;
-let anchor = document.getElementById("anchor");
+function start(){
 
-// change anchor look
-if(type==="male"){
-anchor.src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='500'><rect width='100%' height='100%' fill='black'/><circle cx='200' cy='150' r='80' fill='peachpuff'/><rect x='120' y='230' width='160' height='200' fill='blue'/><text x='200' y='480' fill='white' text-anchor='middle'>Male Anchor</text></svg>";
-}else{
-anchor.src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='500'><rect width='100%' height='100%' fill='black'/><circle cx='200' cy='150' r='80' fill='pink'/><rect x='120' y='230' width='160' height='200' fill='purple'/><text x='200' y='480' fill='white' text-anchor='middle'>Female Anchor</text></svg>";
-}
-
-// ticker
+let text=document.getElementById("news").value;
 document.getElementById("tickerText").innerText=text;
 
-// speech
+// voice
 let speech=new SpeechSynthesisUtterance(text);
 speech.lang="hi-IN";
 speechSynthesis.speak(speech);
 
+// record
+let stream=document.getElementById("area").captureStream(30);
+recorder=new MediaRecorder(stream);
+chunks=[];
+
+recorder.ondataavailable=e=>chunks.push(e.data);
+
+recorder.onstop=()=>{
+  let blob=new Blob(chunks,{type:"video/mp4"});
+  let url=URL.createObjectURL(blob);
+
+  let a=document.createElement("a");
+  a.href=url;
+  a.download="news.mp4";
+  a.click();
+};
+
+recorder.start();
+
+speech.onend=()=>recorder.stop();
+
 }
+
+function download(){
+if(recorder) recorder.stop();
+}
+
 </script>
 
 </body>
