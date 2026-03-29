@@ -32,14 +32,15 @@ select, button {
 #anchor {
   width: 100%;
   border-radius: 10px;
-  transition: 0.2s;
 }
 
+/* ONE LINE TICKER */
 .ticker {
   position: absolute;
   bottom: 0;
   width: 100%;
   background: red;
+  color: white;
   overflow: hidden;
   white-space: nowrap;
 }
@@ -51,8 +52,8 @@ select, button {
 }
 
 @keyframes scroll {
-  from { transform: translateX(0); }
-  to { transform: translateX(-100%); }
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-100%); }
 }
 </style>
 
@@ -62,7 +63,7 @@ select, button {
 
 <h2>📰 AI Hindi News Anchor</h2>
 
-<textarea id="news" placeholder="यहाँ हिंदी न्यूज़ लिखें..."></textarea><br>
+<textarea id="news">नमस्कार, आज की ताज़ा खबरें...</textarea><br>
 
 <select id="voice">
   <option value="male">Male Anchor</option>
@@ -70,42 +71,46 @@ select, button {
 </select>
 
 <button onclick="startNews()">▶ Generate</button>
+<button onclick="downloadVideo()">⬇ Download</button>
 
-<div class="container">
-  <img id="anchor" src="https://i.imgur.com/6RKZ5qG.png">
-  <div class="ticker"><span id="tickerText"></span></div>
+<br><br>
+
+<div class="container" id="recordArea">
+  <!-- WORKING IMAGES -->
+  <img id="anchor"
+   src="https://upload.wikimedia.org/wikipedia/commons/8/89/Portrait_Placeholder.png">
+
+  <div class="ticker">
+    <span id="tickerText"></span>
+  </div>
 </div>
 
 <script>
+
+let recorder, chunks = [];
+
 function startNews() {
 
   let text = document.getElementById("news").value;
   let type = document.getElementById("voice").value;
   let anchor = document.getElementById("anchor");
 
-  // Change anchor image
+  // Better working images
   if(type === "male"){
-    anchor.src = "https://i.imgur.com/6RKZ5qG.png";
+    anchor.src = "https://upload.wikimedia.org/wikipedia/commons/8/89/Portrait_Placeholder.png";
   } else {
-    anchor.src = "https://i.imgur.com/9XnKZ7F.png";
+    anchor.src = "https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp_Image_2023-07-01_at_10.43.50.jpg";
   }
 
-  // Set ticker
   document.getElementById("tickerText").innerText = text;
 
-  // Speech (Hindi)
+  // Speech
   let speech = new SpeechSynthesisUtterance(text);
   speech.lang = "hi-IN";
 
-  let voices = speechSynthesis.getVoices();
-  speech.voice = voices.find(v => v.lang.includes("hi")) || voices[0];
-
-  speech.rate = 1;
-  speech.pitch = 1;
-
   speechSynthesis.speak(speech);
 
-  // Fake lip sync animation
+  // Lip animation
   let anim = setInterval(() => {
     anchor.style.transform = "scale(1.02)";
     setTimeout(() => {
@@ -113,8 +118,46 @@ function startNews() {
     }, 150);
   }, 300);
 
-  speech.onend = () => clearInterval(anim);
+  speech.onend = () => {
+    clearInterval(anim);
+    if(recorder) recorder.stop();
+  };
+
+  startRecording();
 }
+
+// RECORD VIDEO
+function startRecording() {
+  let stream = document.getElementById("recordArea")
+    .captureStream(30);
+
+  recorder = new MediaRecorder(stream);
+  chunks = [];
+
+  recorder.ondataavailable = e => chunks.push(e.data);
+
+  recorder.onstop = () => {
+    let blob = new Blob(chunks, { type: "video/webm" });
+    let url = URL.createObjectURL(blob);
+
+    let a = document.createElement("a");
+    a.href = url;
+    a.download = "news.webm";
+    a.click();
+  };
+
+  recorder.start();
+}
+
+// MANUAL DOWNLOAD
+function downloadVideo(){
+  if(recorder){
+    recorder.stop();
+  } else {
+    alert("पहले Generate करो");
+  }
+}
+
 </script>
 
 </body>
